@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="initial-scale=1.0, width=device-width">
+
+    <title><%= title %> :. fourfivesix.ca</title>
+
+    <link rel="stylesheet" type="text/css" href="/css/bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
+</head>
+<body class="post-page">
+    <div class="viewport">
+        <div class="container">
+            <header class="page-header first-level-container" data-region="pageHeaderRegion">
+
+                <a class="header-home-link" href="/" title="fourfivesix home">
+                    <h1 class="app-title">Four Five Six</h1>
+                </a>
+
+
+            </header>
+
+            <nav class="main-nav" data-region="mainNavRegion"></nav>
+
+            <div class="main row" role="main">
+                <div class="col-md-9">
+                    <article class="main-article  first-level-container" data-region="mainArticleRegion">
+                        <h1 class="article-title"><%= title %></h1>
+                        <label class="post-publish-date">published: <span><%= publishDate %></span></label>
+                        <label class="post-author">author: <span><%= author %></span></label>
+
+                        <div class="post-body">
+                            <%= markup %>
+                        </div>
+                    </article>
+                </div>
+                <div class="col-md-3">
+                    <aside class="main-aside  first-level-container" data-region="asideDataRegion"></aside>
+
+                </div>
+            </div>
+
+            <footer class="page-footer" data-region="pageFooterRegion"></footer>
+        </div>
+    </div>
+    <script data-appname="fourfivesix">
+        (function () {
+
+            var script = document.createElement('script');
+            script.src = '/scripts/lib/graffiti.js';
+            script.async = true;
+
+            var entry = document.getElementsByTagName('script')[0];
+            entry.parentNode.insertBefore(script, entry);
+
+            script = document.createElement('script');
+            script.src = '/scripts/lib/jquery-1.8.2.min.js';
+
+            entry = document.getElementsByTagName('script')[0];
+            entry.parentNode.insertBefore(script, entry);
+
+
+        }());
+    </script>
+    <!--<script>-->
+
+<!-- need to add analytics -->
+    <!--</script>-->
+</body>
+</html>
