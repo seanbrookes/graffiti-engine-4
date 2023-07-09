@@ -1,5 +1,5 @@
 <script setup>
-import { PostList } from './components/post_list';
+import { Main } from './components/';
 import { provide } from 'vue';
 import dataStore from './store/store.js';
 
@@ -8,7 +8,7 @@ provide('store', dataStore);
 </script>
 
 <template>
-  <PostList />
+  <Main />
 </template>
 
 <style scoped>
