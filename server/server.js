@@ -8,6 +8,23 @@ const _ = require('lodash');
 const showdown   = require('showdown');
 const querystring = require('querystring');
 const config = require('./config');
+
+/**
+ * This is the main backend file for GE
+ * I handles fetching, saving, editing, publishing, painting, etc for the local post data
+ */
+
+
+
+
+
+
+
+
+
+
+
+
 // TODO - this will need to be more dynamic
 const PORT = 4444;
 
@@ -164,79 +181,284 @@ server.post('/api/posts', (req, res) => {
 
 /* 
 
-  PUBLISH
+  PAINT POST
 
+
+  Straight up repaint, no updates to meta data or edits to post.  
+  Generally for use cases where we want to simply replace a previously published post
+  Possbily the site has moved and needs to be 'repainted' or a post was written to the wrong folder
+  and needs to be corrected
 */
-function postPost(targetConfig, post, cb){
+server.get('/api/paintpost/:id', (req, res) => {
+  const postId = req.params.id;
+
+  const path = `./server/posts/${postId}.json`;
+  if (postId && fs.existsSync(path)) {
+    fs.readFile(path, function(err, data) { 
+      
+      // Check for errors 
+      if (err) throw err; 
+     
+      // Converting to JSON 
+      const targetPost = JSON.parse(data); 
+        
+     console.log('posts  AAAA');
+      //res.send(JSON.stringify(post));
+
+      const saveTimestamp = new Date().getTime();
+      if (!targetPost || !targetPost.body) {
+        res.sendStatus(500);
+        res.send({message: 'not saved missing post body'});
+      }
+      let freshPost = Object.assign({}, targetPost);
+      if (!freshPost.date) {
+        freshPost.date = saveTimestamp;
+      }
+
+      freshPost.lastUpdate = saveTimestamp;
+      console.log('REPAINT freshPost.lastUpdate', freshPost.lastUpdate);
+      console.log('REPAINT this thing', JSON.stringify(freshPost, null, 2));
+      const post = freshPost;
+
+
+      var targetConfig = {
+        host: 'localhost',
+        port: '8888',
+        path: '/api/inbox',
+        apiKey: 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO'
+      };
+
+
+      var post_data = querystring.stringify({
+        'ApiKey': 'luhlkj',
+        'PostSlug': post.slug,
+        'PostBody': post.body
+      });
+  
+      // An object of options to indicate where to post to
+      var post_options = {
+        host: 'localhost',
+        port: '8888',
+        path: '/api/inbox',
+  //            path: '/inbox.php',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': post_data.length
+        }
+      };
+  
+      const author = 'Sean Brookes';
+    /**
+   *
+   * Establish the publish date
+   * note this may not be valid in case
+   * there is a failure in the flow
+   *
+   * */
+    post.publishDate = new Date();
+    post.publishYear = post.publishDate.getFullYear();
+    post.publishMonth = (post.publishDate.getMonth() + 1);
+    post.publishDay = (post.publishDate.getDate());
+    post.lastUpdate = new Date();
+    post.id = postId;
+    post.author = author;
+    post.status = 'published';
+    post.apiKey = 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO';
+  
+    var targetConfig = {
+      host: 'localhost',
+      port: '8888',
+      path: '/api/inbox',
+      apiKey: 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO'
+    };
+    postPost(targetConfig, post, (err, doc) => {
+      console.log('|  publish callback ', post.title);
+      // save this post
+      /*
+      write the file
+      */
+      // fs.writeFile(`./server/posts/${post.id}.json`, JSON.stringify(post), err => { 
+            
+      //   // Checking for errors 
+      //   if (err) throw err;  
+  
+      //   //  console.log("Done writing"); // Success 
+      //   res.send({status: 200, message: 'published'});
+      // });
+    });
+      // Set up the request
+      /*
+       *
+       *
+       *  POST PUBLISH DOCUMENT TO INBOX
+       *
+       * Request
+       *
+       *
+       * */
+  
+      // console.log('| here |  the doc to post: ' + publishDoc);
+      // var post_req = http.request(post_options, function (res) {
+      //   res.setEncoding('utf8');
+      //   res.on('data', function (chunk) {
+      //     //console.log('| ');
+      //     console.log('PAINT Response: It worked!!!');
+      //     //console.log('| ');
+      //   });
+      // });
+      // post_req.write(post_data);
+      // post_req.end();
 
 
 
 
-  var publishDoc;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      /*
+      write the file
+      */
+      // fs.writeFile(`./server/posts/${freshPost.id}.json`, JSON.stringify(freshPost), err => {          
+      //   // Checking for errors 
+      //   if (err) throw err;  
+      //   res.send({status: 200, message: 'saved'});
+      // });
+
+    });
+  }
+  else {
+    res.sendStatus(404);
+    //res.send({status: 404, message: 'resource not found'});
+  }
+
+  
+
+});
+
+
+/**
+ * Takes the post as json object and converts into a valid html document
+ * It loads the post template file
+ * establishes publish year and publish month 
+ * converts the markdown to html
+ * compiles the markup fragment into the html doc
+ * returns the doc
+ * 
+ * Note this is async so needs to run as a promise.
+ * This isn't ideal as it forces us to contort the calling logic and embed within this 
+ * function execution scope.  not ideal but not the end of th world for now
+ * 
+ * @param {object} post - raw json version of post including metadata
+ * @returns {string} - fully compiled/valie html document
+ */
+const getCompiledPost = async (post) => {
 
   fs.readFile('./server/templates/postTemplate.html', 'utf8', function (err, tpl) {
     if (err) {
-      return console.log(err);
+      return console.log(` getCompiledPost Error loading post template source file: ${err}`);
     }
     var pubDate = new Date(post.publishDate);
-
+    console.log(`| getCompiledPost pubDate ${pubDate}`);
 
     post.publishYear = post.publishDate.getFullYear();
+    console.log(`| getCompiledPost post.publishYear ${post.publishYear}`);
     post.publishMonth = (post.publishDate.getMonth() + 1);
+    console.log(`| getCompiledPost post.publishMonth ${post.publishMonth}`);
 
     post.markup = converter.makeHtml(post.body);
+    console.log(`| getCompiledPost post.markup ${post.markup}`);
 
     var compiled = _.template(tpl);
 
     publishDoc = compiled(post);
+    console.log(`| getCompiledPost publishDoc ${publishDoc}`);
 
-    var post_data = querystring.stringify({
-      'ApiKey': targetConfig.apiKey,
-      'PostPublishYear': post.publishYear,
-      'PostPublishMonth': post.publishMonth,
-      'PostSlug': post.slug,
-      'PostBody': publishDoc
-    });
-
-    // An object of options to indicate where to post to
-    var post_options = {
-      host: targetConfig.host,
-      port: targetConfig.port,
-      path: targetConfig.path,
-//            path: '/inbox.php',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': post_data.length
-      }
-    };
-
-
-    // Set up the request
-    /*
-     *
-     *
-     *  POST PUBLISH DOCUMENT TO INBOX
-     *
-     * Request
-     *
-     *
-     * */
-
-    // console.log('| here |  the doc to post: ' + publishDoc);
-    var post_req = http.request(post_options, function (res) {
-      res.setEncoding('utf8');
-      res.on('data', function (chunk) {
-        //console.log('| ');
-        console.log('Response: It worked!!!');
-        //console.log('| ');
-      });
-    });
-    post_req.write(post_data);
-    post_req.end();
-    cb(null, publishDoc);// publishDoc;
-
+    return publishDoc;
   });
+};
+
+
+/**
+
+  PUBLISH
+
+  Send the post to the target host.
+  This is the last step before it leaves the source app
+  
+  @param {object} targetConfig - host info for the target environment (host. port, path, etc
+  @param {object} post - post to be sent to host env
+  @param {function} cb - optional callback method to exectute after posting
+*/
+function postPost(targetConfig, post, cb){
+  
+  console.log('|  POST THE POST ');
+  // COMPILE THE POST
+  const publishDoc = getCompiledPost(post)
+    .then((publishedDoc) => {
+      var post_data = querystring.stringify({
+        'ApiKey': targetConfig.apiKey,
+        'PostPublishYear': post.publishYear,
+        'PostPublishMonth': post.publishMonth,
+        'PostSlug': post.slug,
+        'PostBody': publishDoc
+      });
+  
+      // An object of options to indicate where to post to
+      var post_options = {
+        host: targetConfig.host,
+        port: targetConfig.port,
+        path: targetConfig.path,
+  //            path: '/inbox.php',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': post_data.length
+        }
+      };
+  
+  
+      // Set up the request
+      /*
+       *
+       *
+       *  POST PUBLISH DOCUMENT TO INBOX
+       *
+       * Request
+       *
+       *
+       * */
+  
+      // console.log('| here |  the doc to post: ' + publishDoc);
+      var post_req = http.request(post_options, function (res) {
+        res.setEncoding('utf8');
+        console.log('Response: It worked!!!');
+        res.on('data', function (chunk) {
+          //console.log('| ');
+          console.log('Response: we got a response ', chunk);
+          //console.log('| ');
+        });
+      });
+      post_req.write(post_data);
+      post_req.end();
+      cb(null, publishDoc);// publishDoc;
+    });
 }
 server.post('/api/publish', (req, res) => {
   const post = req.body;
