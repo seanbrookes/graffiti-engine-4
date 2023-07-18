@@ -56,7 +56,37 @@ const fetchPosts = async () => {
 
   });
 };
+const paintPost = async (postId) => {
+  if (postId) {
+    const response = fetch(`http://localhost:4444/api/paintpost/${postId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    .then((response) => {
+      console.log('response status from paint request', response.status);
+      if (response.status !== 200) {
+        // console.log('|');
+        // console.log('|  non 200 response', response.json());
+        // console.log('|');
+  
+        throw response;
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log('paint post Success:', data);
 
+    })
+    .catch((error) => {
+  
+        console.error('| paint post error:', error);
+  
+    });
+  }
+
+};
 // apply any filters
 const refreshPostList = () => {
   if (state.searchText === '') {
@@ -107,11 +137,11 @@ const state = reactive({
 });
 
 const methods = {
-  fetchPosts() {
+  fetchPosts () {
     return fetchPosts();
   },
 
-  getData1() {
+  getData1 () {
     return state.data_1;
   },
   toggleSort (sortProperty) {
@@ -128,8 +158,11 @@ const methods = {
   },
   
   clearSearchText () {
-    state.searchText = '';
     refreshPostList();
+  },
+
+  paintPost (postId) {
+    return paintPost(postId);
   },
 
 };
