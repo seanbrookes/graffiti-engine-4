@@ -2,7 +2,7 @@
   "name": "graffiti-engine-4",
   "private": false,
   "version": "0.0.0",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -14,7 +14,9 @@
     "express": "^4.18.2",
     "fs": "^0.0.1-security",
     "lodash": "^4.17.20",
+    "marked": "^5.1.1",
     "node-fetch": "^3.3.1",
+    "parse5": "^7.1.2",
     "querystring": "^0.2.0",
     "request": "^2.88.2",
     "showdown": "^1.9.1",
