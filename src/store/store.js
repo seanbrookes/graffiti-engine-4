@@ -58,7 +58,7 @@ const fetchPosts = async () => {
 };
 const paintPost = async (postId) => {
   if (postId) {
-    const response = fetch(`http://localhost:4444/api/paintpost/${postId}`, {
+    const response = fetch(`http://localhost:4444/api/paintpost/${postId}?logit=true`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

@@ -1,21 +1,136 @@
-const express = require('express');
-const fs = require('fs');
-const http = require('http');
-var cors = require('cors');
-const bodyParser = require('body-parser');
-const TurndownService = require('turndown');
-const _ = require('lodash');
-const showdown   = require('showdown');
-const querystring = require('querystring');
-const config = require('./config');
+import express from 'express';
+import fs from 'fs';
+import http from 'http';
+import cors from 'cors';
+import TurndownService from 'turndown';
+import _ from 'lodash';
+import showdown from 'showdown';
+import querystring from 'querystring';
+import fetch from 'node-fetch';
+import { parse } from 'parse5';
 
+
+
+
+import config from './config.js';
 /**
  * This is the main backend file for GE
  * I handles fetching, saving, editing, publishing, painting, etc for the local post data
  */
 
 
+function toJSON(node) {
+  let propFix = { for: 'htmlFor', class: 'className' };
+  let specialGetters = {
+    style: (node) => node.style.cssText,
+  };
+  let attrDefaultValues = { style: '' };
+  let obj = {
+    nodeType: node.nodeType,
+  };
+  if (node.tagName) {
+    obj.tagName = node.tagName.toLowerCase();
+  } else if (node.nodeName) {
+    obj.nodeName = node.nodeName;
+  }
+  if (node.nodeValue) {
+    obj.nodeValue = node.nodeValue;
+  }
+  let attrs = node.attributes;
+  if (attrs) {
+    let defaultValues = new Map();
+    for (let i = 0; i < attrs.length; i++) {
+      let name = attrs[i].nodeName;
+      defaultValues.set(name, attrDefaultValues[name]);
+    }
+    // Add some special cases that might not be included by enumerating
+    // attributes above. Note: this list is probably not exhaustive.
+    switch (obj.tagName) {
+      case 'input': {
+        if (node.type === 'checkbox' || node.type === 'radio') {
+          defaultValues.set('checked', false);
+        } else if (node.type !== 'file') {
+          // Don't store the value for a file input.
+          defaultValues.set('value', '');
+        }
+        break;
+      }
+      case 'option': {
+        defaultValues.set('selected', false);
+        break;
+      }
+      case 'textarea': {
+        defaultValues.set('value', '');
+        break;
+      }
+    }
+    let arr = [];
+    for (let [name, defaultValue] of defaultValues) {
+      let propName = propFix[name] || name;
+      let specialGetter = specialGetters[propName];
+      let value = specialGetter ? specialGetter(node) : node[propName];
+      if (value !== defaultValue) {
+        arr.push([name, value]);
+      }
+    }
+    if (arr.length) {
+      obj.attributes = arr;
+    }
+  }
+  let childNodes = node.childNodes;
+  // Don't process children for a textarea since we used `value` above.
+  if (obj.tagName !== 'textarea' && childNodes && childNodes.length) {
+    let arr = (obj.childNodes = []);
+    for (let i = 0; i < childNodes.length; i++) {
+      arr[i] = toJSON(childNodes[i]);
+    }
+  }
+  return obj;
+}
 
+function toDOM(input) {
+  let obj = typeof input === 'string' ? JSON.parse(input) : input;
+  let propFix = { for: 'htmlFor', class: 'className' };
+  let node;
+  let nodeType = obj.nodeType;
+  switch (nodeType) {
+    // ELEMENT_NODE
+    case 1: {
+      node = document.createElement(obj.tagName);
+      if (obj.attributes) {
+        for (let [attrName, value] of obj.attributes) {
+          let propName = propFix[attrName] || attrName;
+          // Note: this will throw if setting the value of an input[type=file]
+          node[propName] = value;
+        }
+      }
+      break;
+    }
+    // TEXT_NODE
+    case 3: {
+      return document.createTextNode(obj.nodeValue);
+    }
+    // COMMENT_NODE
+    case 8: {
+      return document.createComment(obj.nodeValue);
+    }
+    // DOCUMENT_FRAGMENT_NODE
+    case 11: {
+      node = document.createDocumentFragment();
+      break;
+    }
+    default: {
+      // Default to an empty fragment node.
+      return document.createDocumentFragment();
+    }
+  }
+  if (obj.childNodes && obj.childNodes.length) {
+    for (let childNode of obj.childNodes) {
+      node.appendChild(toDOM(childNode));
+    }
+  }
+  return node;
+}
 
 
 
@@ -29,11 +144,15 @@ const config = require('./config');
 const PORT = 4444;
 
 const server = express();
-server.use(bodyParser.urlencoded({ extended: true }));
-server.use(bodyParser.json());
-server.use(bodyParser.raw());
+/*
+
+So, bodyParser.json() and bodyParser.urlencoded() are built into Express as express.json() and express.urlencoded() so you don't have to import body-parser at all.
+*/
+// server.use(bodyParser.urlencoded({ extended: true }));
+// server.use(bodyParser.json());
+// server.use(bodyParser.raw());
 server.use(cors());
-converter = new showdown.Converter();
+const converter = new showdown.Converter();
 
 const getSlug = (title) => {
   // replace spaces with dashes
@@ -191,6 +310,8 @@ server.post('/api/posts', (req, res) => {
 */
 server.get('/api/paintpost/:id', (req, res) => {
   const postId = req.params.id;
+  const isLogging = req.query.logit;
+  // const isLogging = false;
 
   const path = `./server/posts/${postId}.json`;
   if (postId && fs.existsSync(path)) {
@@ -221,16 +342,12 @@ server.get('/api/paintpost/:id', (req, res) => {
       const post = freshPost;
 
 
-      var targetConfig = {
-        host: 'localhost',
-        port: '8888',
-        path: '/api/inbox',
-        apiKey: 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO'
-      };
+
 
 
       var post_data = querystring.stringify({
         'ApiKey': 'luhlkj',
+        'IsLogging': 'true',
         'PostSlug': post.slug,
         'PostBody': post.body
       });
@@ -270,6 +387,7 @@ server.get('/api/paintpost/:id', (req, res) => {
       host: 'localhost',
       port: '8888',
       path: '/api/inbox',
+      isLoggingOn: isLogging,
       apiKey: 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO'
     };
     postPost(targetConfig, post, (err, doc) => {
@@ -354,6 +472,9 @@ server.get('/api/paintpost/:id', (req, res) => {
 
 
 /**
+ * 
+ * COMPILE POST FROM TEMPLATE
+ * 
  * Takes the post as json object and converts into a valid html document
  * It loads the post template file
  * establishes publish year and publish month 
@@ -369,8 +490,25 @@ server.get('/api/paintpost/:id', (req, res) => {
  * @returns {string} - fully compiled/valie html document
  */
 const getCompiledPost = async (post) => {
+  const templateData = fs.readFileSync('./server/templates/postTemplate.html', 'utf8');
+  var pubDate = new Date(post.publishDate);
+  console.log(`| getCompiledPost pubDate ${pubDate}`);
 
-  fs.readFile('./server/templates/postTemplate.html', 'utf8', function (err, tpl) {
+  post.publishYear = post.publishDate.getFullYear();
+  console.log(`| getCompiledPost post.publishYear ${post.publishYear}`);
+  post.publishMonth = (post.publishDate.getMonth() + 1);
+  console.log(`| getCompiledPost post.publishMonth ${post.publishMonth}`);
+
+  post.markup = converter.makeHtml(post.body);
+  console.log(`| getCompiledPost post.markup ${post.markup}`);
+
+  var compiled = _.template(templateData);
+
+  const publishDoc = compiled(post);
+ //  console.log(`| getCompiledPost publishDoc ${publishDoc}`);
+
+  return publishDoc;
+/*  return fs.readFile('./server/templates/postTemplate.html', 'utf8', function (err, tpl) {
     if (err) {
       return console.log(` getCompiledPost Error loading post template source file: ${err}`);
     }
@@ -387,17 +525,47 @@ const getCompiledPost = async (post) => {
 
     var compiled = _.template(tpl);
 
-    publishDoc = compiled(post);
-    console.log(`| getCompiledPost publishDoc ${publishDoc}`);
+    const publishDoc = compiled(post);
+   //  console.log(`| getCompiledPost publishDoc ${publishDoc}`);
 
     return publishDoc;
   });
+  */
 };
 
+const postTheDamnDocument = async (post_data, arg2, arg3) => {
+  console.log(`| postTheDamnDocument A`);
+//  const urlPath = 'http://localhost:8888/api/inbox';
+  const urlPath = 'http://localhost/fourfivesix/inbox/inbox.php';
+  console.log(`| postTheDamnDocument B`);
+  const response = await fetch(urlPath, {
+    method: 'POST', 
+    body: JSON.stringify(post_data),
+    // headers: {'Content-Type': 'application/json'}
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': post_data.length
+    }
+  });
+  const data = await response.text();
+  // console.log(`| postTheDamnDocument C `, response);
+  // const data = await response.json();
+  console.log(`| postTheDamnDocument D`);
+
+  // TODO surface status of repaint effort to signal the frontend of success / failure
+  if (response.ok) {
+    console.log('Response: It worked!!!');
+    console.log('| RESPONSE FROM PHP text() ', data);
+      
+  } else {
+    console.log('Response: It DID NOT WORK ', response.status);
+    console.log('Response: It DID NOT WORK data ', data);
+  }
+};
 
 /**
 
-  PUBLISH
+  POST POST
 
   Send the post to the target host.
   This is the last step before it leaves the source app
@@ -406,59 +574,45 @@ const getCompiledPost = async (post) => {
   @param {object} post - post to be sent to host env
   @param {function} cb - optional callback method to exectute after posting
 */
-function postPost(targetConfig, post, cb){
+const postPost = async (targetConfig, post, cb) => {
   
   console.log('|  POST THE POST ');
   // COMPILE THE POST
-  const publishDoc = getCompiledPost(post)
-    .then((publishedDoc) => {
+  const publishDoc = await getCompiledPost(post)
+    .then((publishDoc) => {
+      // console.log('|  promise after compile publishDoc', publishDoc);
+
+
+
+
+      // var post_data = querystring.stringify({
+      //   'ApiKey': targetConfig.apiKey,
+      //   'PostPublishYear': post.publishYear,
+      //   'PostPublishMonth': post.publishMonth,
+      //   'PostSlug': post.slug,
+      //   'PostBody': publishDoc
+      // });
+    
+      // var post_data = {
+      //   ApiKey: targetConfig.apiKey,
+      //   PostPublishYear: post.publishYear,
+      //   PostPublishMonth: post.publishMonth,
+      //   PostSlug: post.slug,
+      //   PostBody: publishDoc
+      // };    
       var post_data = querystring.stringify({
-        'ApiKey': targetConfig.apiKey,
-        'PostPublishYear': post.publishYear,
-        'PostPublishMonth': post.publishMonth,
-        'PostSlug': post.slug,
-        'PostBody': publishDoc
-      });
-  
-      // An object of options to indicate where to post to
-      var post_options = {
-        host: targetConfig.host,
-        port: targetConfig.port,
-        path: targetConfig.path,
-  //            path: '/inbox.php',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': post_data.length
-        }
-      };
-  
-  
-      // Set up the request
-      /*
-       *
-       *
-       *  POST PUBLISH DOCUMENT TO INBOX
-       *
-       * Request
-       *
-       *
-       * */
-  
-      // console.log('| here |  the doc to post: ' + publishDoc);
-      var post_req = http.request(post_options, function (res) {
-        res.setEncoding('utf8');
-        console.log('Response: It worked!!!');
-        res.on('data', function (chunk) {
-          //console.log('| ');
-          console.log('Response: we got a response ', chunk);
-          //console.log('| ');
-        });
-      });
-      post_req.write(post_data);
-      post_req.end();
-      cb(null, publishDoc);// publishDoc;
+        ApiKey: targetConfig.apiKey,
+        PostPublishYear: post.publishYear,
+        PostPublishMonth: post.publishMonth,
+        IsLogging: targetConfig.isLoggingOn,
+        PostSlug: post.slug,
+        PostBody: publishDoc
+      });    
+      return postTheDamnDocument(post_data);
+
     });
+
+
 }
 server.post('/api/publish', (req, res) => {
   const post = req.body;
@@ -490,12 +644,14 @@ server.post('/api/publish', (req, res) => {
   post.lastUpdate = new Date();
   post.author = author;
   post.status = 'published';
+  post.isLogging = 'true';
   post.apiKey = 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO';
 
   var targetConfig = {
     host: 'localhost',
     port: '8888',
     path: '/api/inbox',
+    isLoggingOn: 'true',
     apiKey: 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO'
   };
   postPost(targetConfig, post, (err, doc) => {
