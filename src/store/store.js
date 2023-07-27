@@ -1,7 +1,16 @@
 import { reactive } from 'vue';
-
+const state = reactive({
+  postList: [],
+  currentSortDir: 'desc',
+  currentSortCol: 'lastUpdate',
+  searchText: '',
+  currentPost: {},
+  currentPostId: '',
+  maxCharCount: 0,
+});
 const postsServiceEndpoint = 'http://localhost:4444/api/posts';
 
+// /api/post/
 
 const sortState = {sortAscending: false, sortProp: 'lastUpdate'};
 const sortAlgo = (a, b) => {
@@ -13,6 +22,37 @@ const sortAlgo = (a, b) => {
   }
 
  };
+
+const fetchPost = async (postId) => {
+  if (!postId) {
+    return;
+  }
+  fetch(`http://localhost:4444/api/post/${postId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    .then((response) => {
+      console.log('response status', response.status);
+      if (response.status !== 200) {
+        // console.log('|');
+        // console.log('|  non 200 response', response.json());
+        // console.log('|');
+
+        throw response;
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log('fetch post Success:', data);
+      state.currentPost = data;
+    })
+    .catch((error) => {
+      console.error('| fetch posts error:', error);
+      return null;
+    });
+};
 
 const fetchPosts = async () => {
   const response = fetch(postsServiceEndpoint, {
@@ -56,6 +96,7 @@ const fetchPosts = async () => {
 
   });
 };
+
 const paintPost = async (postId) => {
   if (postId) {
     const response = fetch(`http://localhost:4444/api/paintpost/${postId}?logit=true`, {
@@ -77,6 +118,7 @@ const paintPost = async (postId) => {
     })
     .then(data => {
       console.log('paint post Success:', data);
+      return data;
 
     })
     .catch((error) => {
@@ -84,6 +126,7 @@ const paintPost = async (postId) => {
         console.error('| paint post error:', error);
   
     });
+    return response;
   }
 
 };
@@ -128,13 +171,7 @@ const sortTheList = () => {
 };
 
 
-const state = reactive({
-  postList: [],
-  currentSortDir: 'desc',
-  currentSortCol: 'lastUpdate',
-  searchText: '',
-  maxCharCount: 0,
-});
+
 
 const methods = {
   fetchPosts () {
@@ -165,6 +202,9 @@ const methods = {
     return paintPost(postId);
   },
 
+  fetchPost (postId) {
+    return fetchPost(postId);
+  }
 };
 
 export default {
