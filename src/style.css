@@ -9,12 +9,25 @@ body {
 }
 
 button {
-  padding: 0;
+  padding: .3rem;
   margin: 0;
   background: transparent;
-  border: 0;
+  border: 1px solid #dddddd;
+  border-radius: .2rem;
   cursor: pointer;
   font-size: 16px;
+  color: darkblue;
+}
+
+button:hover {
+  background: #efefef;
+  border: 1px solid #eeeeee;
+  color: darkred;
+}
+button:active {
+  background: #444444;
+  border: 1px solid #000000;
+  color: #eeeeee;
 }
 th, td {
   text-align: left;

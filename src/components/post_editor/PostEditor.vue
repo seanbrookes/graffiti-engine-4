@@ -3,7 +3,7 @@ import { ref, inject, reactive, watch, computed, onMounted } from 'vue';
 import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown } from '@codemirror/lang-markdown';
-
+import {EditorState} from "@codemirror/state"
 import { marked } from 'marked';
 import { mangle } from "marked-mangle";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -12,63 +12,320 @@ const markedOptions = {
   prefix: 'gfe-',
 };
 
+const componentState = reactive({
+  isSaving: false,
+  isShowPreview: false,
+});
+
+const DEFAULT_AUTOSAVE_MS = 60000;
+let autosaveTimerRef = ref(null);
+let autoSaveTimerDelay = ref(null);
+let autosaveIndicator = ref(null);
+
+
 const store = inject('store');
 
 let editor = {};
 let currentHTML = '';
-setTimeout(() => {
-  console.log('| Timeout firing -- now --');
-  marked.use(mangle());
-  marked.use(gfmHeadingId(markedOptions));
-  const currentHTML = marked.parse(store?.state?.currentPost?.body);
-  document.getElementById('editor').innerHTML = currentHTML;
+let currentView = 'editor';
+const isAutoSaveRef = ref();
 
-  const code_mirror_el = document.getElementById('code_mirror_editor_el');
-  // let view = new EditorView({
-  //   doc: store?.state?.currentPost?.body,
-  //   extensions: [basicSetup, javascript()],
-  //   parent: el
-  // });
-  let view = new EditorView({
-    doc: store?.state?.currentPost?.body,
-    extensions: [basicSetup, markdown()],
-    parent: code_mirror_el
-  });  
+// TODO this is sloppy
+const setTabView = (event) => {
+  const value = event.target.value;
+  currentView = value;
 
-}, 2000);
+  if (value === 'preview') {
+    componentState.isShowPreview = true;
+  }
+  else {
+    componentState.isShowPreview = false;
+  }
+  renderCodeMirror();
+};
 
-// onMounted(() => {
-//   console.log('| onMounted firing -- now -- ',  store?.state?.currentPost?.body);
-//   if (store?.state?.currentPost?.body) {
-//     document.getElementById('editor').innerHTML = currentPostDom;
-//   }
-// });
+let isAutoSave = ref(true);
 
-const currentPostDom = computed(() => {
-  console.log("computed currentPostDom");
-  let currentHTML = null;
-  if (store?.state?.currentPost?.body) {
+
+
+const previewEl = ref(null);
+const editorEl = ref(null);
+
+const renderCodeMirror = () => {
+  console.log('| renderCodeMirror currentView ', currentView);
+  /**
+   * 
+   *  MARKED EDITOR
+   * 
+   * 
+   */
+
+  if (currentView === 'preview') {
+    const editorEl = document.getElementById('editor');
     marked.use(mangle());
     marked.use(gfmHeadingId(markedOptions));
-    currentHTML = marked.parse(store?.state?.currentPost?.body);
+    const currentHTML = marked.parse(store?.state?.currentPost?.body);    
+    previewEl.value.innerHTML = currentHTML;
+
   }
-  return currentHTML;
+  else {
+    /**
+     * 
+     *  CODE MIRROR EDITOR
+     * 
+     * 
+     */
+    const code_mirror_el = document.getElementById('code_mirror_editor_el');
+    previewEl.value.innerHTML = null;
+    const editorValue = editor.state.doc.toString();
+    editor.dispatch({
+      changes: {
+        from: 0,
+        to: editorValue.length,
+        insert: store?.state?.currentPost?.body || "",
+      },
+    });
+
+  }
+
+};
+let sync_val = null;
+const initialEditorState = {
+  doc: store?.state?.currentPost?.body,
+  extensions: [
+    EditorView.updateListener.of(function(e) {
+      sync_val = e.state.doc.toString();
+    }),
+    basicSetup, markdown(),
+  ]
+};
+const editorState = EditorState.create(initialEditorState);
+
+onMounted(() => {
+  autoSaveTimerDelay = DEFAULT_AUTOSAVE_MS;
+  editor = new EditorView({
+    state: editorState,  
+    parent: editorEl.value
+  });
+  if (isAutoSave && (typeof autosaveTimerRef !== 'number')) {
+   // if (!autosaveTimerRef) {
+      console.log('|  watch currentPost start autosave timer');
+      autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
+      console.log('|  watch currentPost start autosave timer  typeof ' );
+   // }
+  }
+
+  document.addEventListener('visibilitychange', function(event) {
+    if (document.hidden) {
+      console.log('| GE4 tab is hidden - pausing autosave');
+      clearTimeout(autosaveTimerRef);
+    } else {
+      if (isAutoSave) {      
+        console.log('| GE4 tab is visible - restarting autosave');
+        autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
+      }
+    }
+  });  
 });
 
 const currentPost = computed(() => {
-  console.log('| computed currentPost');
   return store?.state?.currentPost?.body;
 });
+watch(isAutoSave, (value) => {
+
+  if (!isAutoSave.value) {
+    clearTimeout(autosaveTimerRef);
+  }
+  else {
+    autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
+  }
+});
+watch(currentPost, (value) => {
+  renderCodeMirror();
+  doTheSvg();
+});
+
+
+const setSaveIndicator = (value) => {
+  componentState.isSaving = value;
+};
+
+const savePost = () => {
+
+  if (sync_val) {
+    // isSaving = true;
+    // isVisible = true;
+
+    setSaveIndicator(true);
+    store.methods.updateCurrentPostBody(sync_val);
+    store.methods.saveCurrentPost();
+
+    setTimeout(() => {
+      setSaveIndicator(false);
+      // isVisible = false;
+      // componentState.isSaving = false;
+    }, 3000)
+  }
+};
+
+const clearNew = () => {
+  if (confirm('clear this post?')) {
+    document.location.href = '/';
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let arc = ref(null);
+
+
+function degToRad (degrees) {
+  return degrees * Math.PI / 180;
+}
+
+// Returns a tween for a transition’s "d" attribute, transitioning any selected
+// arcs from their current angle to the specified new angle.
+function arcTween(newAngle, angle) {
+  return function(d) {
+    var interpolate = d3.interpolate(d[angle], newAngle);
+    return function(t) {
+      d[angle] = interpolate(t);
+      return arc(d);
+    };
+  };
+}
+
+const animationTime = 1200;
+const loaderRadius = 6;
+const loaderColor = '#ccc';
+
+const doTheSvg = () => {
+  arc = d3.arc()
+    .innerRadius(0)
+    .outerRadius(loaderRadius);
+
+var svg = d3.select("#thesvg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height"),
+    g = svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+var loader = g.append("path")
+    .datum({endAngle: 0, startAngle: 0})
+    .style("fill", loaderColor)
+    .attr("d", arc);
+
+d3.interval(function() {
+  loader.datum({endAngle: 0, startAngle: 0})
+  
+  loader.transition()
+      .duration(animationTime)
+      .attrTween("d", arcTween(degToRad(360), 'endAngle'));
+  
+   loader.transition()
+      .delay(animationTime)
+      .duration(animationTime)
+      .attrTween("d", arcTween(degToRad(360), 'startAngle'));
+}, animationTime * 2);
+
+
+};
+
+
+
+
+
+
+
 
 </script>
 <template>
   <div>Post Editor</div>
-  <div id="code_mirror_editor_el"></div>
+  
+  <button @click="clearNew">clear</button>
+  <button value="editor" @click="setTabView">editor</button>
+  <button value="preview" @click="setTabView">preview</button>
 
-  <!-- Create the editor container -->
-  <div id="editor"></div>
-  <hr />
-  <div>{{ currentPostDom }}</div>
-  <hr />
-  <div>{{ currentPost }}</div>
+  <!-- marked preview -->
+  <div id="editor" ref="previewEl"></div> 
+  <div data-id="editor_view_container">
+    <div data-id="editor_input_container">
+      <!-- codemirror edting -->
+      <div id="code_mirror_editor_el" ref="editorEl"></div>
+    </div>
+    <div data-id="editor_buttons_container">
+      <label>autosave<input type="checkbox" ref="isAutoSaveRef" v-model="isAutoSave" /></label>
+      <button data-id="editor_save_button" class="primary" @click="savePost">
+        <span>save</span>
+        <svg id="thesvg" ref="autosaveIndicator" :class="{ saving: componentState.isSaving }" width="20" height="20"></svg>
+      </button>
+    </div>
+  </div>
 </template>
+<style scoped>
+[data-id="editor_view_container"] {
+  border: 1px solid #eeeeee;
+  padding: 1rem;
+}
+[data-id="editor_input_container"] {
+  border: 1px solid #eeeeee;
+  max-height: 500px;
+  overflow-y: scroll;
+}
+[data-id="editor_buttons_container"] {
+  display: flex;
+  padding: 1rem;
+  justify-content: end;
+}
+[data-id="editor_buttons_container"] label {
+  display: flex;
+  padding: 0 1.5rem;
+  align-items: center;
+}
+[data-id="editor_save_button"] {
+  background: blue;
+  border: 1px solid #dddddd;
+  color: #ffffff;
+  display: flex;
+  padding-left: 1.6rem;
+  align-items: center;
+}
+[data-id="editor_save_button"]:hover {
+  background: #efefef;
+  border: 1px solid #eeeeee;
+  color: darkred;
+}
+[data-id="editor_save_button"]:active {
+  background: #444444;
+  border: 1px solid #000000;
+  color: #eeeeee;
+}
+[data-id="editor_save_button"] svg {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.5s linear;
+}
+[data-id="editor_save_button"] svg.saving {
+  visibility: visible;
+  opacity: .7;
+  transition: opacity 0.5s linear;
+}
+</style>
