@@ -144,6 +144,8 @@ function toDOM(input) {
 const PORT = 4444;
 
 const server = express();
+server.use(express.json());
+// server.use(express.urlencoded({ extended: true }));
 /*
 
 So, bodyParser.json() and bodyParser.urlencoded() are built into Express as express.json() and express.urlencoded() so you don't have to import body-parser at all.
@@ -257,12 +259,14 @@ server.get('/api/post/:id', (req, res) => {
 */
 server.post('/api/posts', (req, res) => {
   const targetPost = req.body;
+  console.log('| SAVE POST req ', req.body);
   const saveTimestamp = new Date().getTime();
   if (!targetPost || !targetPost.body) {
-    res.sendStatus(500);
+    res.status = 500
     res.send({message: 'not saved missing post body'});
   }
-  let freshPost = Object.assign({}, targetPost);
+  console.log('| SAVE POST ', targetPost.body);
+  let freshPost = targetPost;
   if (!freshPost.date) {
     freshPost.date = saveTimestamp;
   }
@@ -276,7 +280,7 @@ server.post('/api/posts', (req, res) => {
     */
     freshPost.status = 'draft';
     freshPost.id = guid();
-    freshPost.title = targetPost.title ? targetPost.title : '';
+    freshPost.title = targetPost.title ? targetPost.title : '__no_title__';
   }
   if (!freshPost.status) {
     freshPost.status = 'draft';

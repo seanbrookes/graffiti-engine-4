@@ -50,9 +50,9 @@ const editPost = (event) => {
 
 <template>
   <div data-id="post_list_container">
+    <h2>Post list</h2>
     <div style="text-align: left"><input data-id="post_list_search_input" type="text" @input="searchTextInput" :value="store.state.searchText" /><button @click="clearSearchText">X</button></div>
     <table>
-      <caption>Post list</caption>
       <thead>
         <tr>
           <th></th>

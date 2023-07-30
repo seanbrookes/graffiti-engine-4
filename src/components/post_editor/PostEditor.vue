@@ -12,6 +12,17 @@ const markedOptions = {
   prefix: 'gfe-',
 };
 
+const componentState = reactive({
+  isSaving: false,
+  isShowPreview: false,
+});
+
+const DEFAULT_AUTOSAVE_MS = 60000;
+let autosaveTimerRef = ref(null);
+let autoSaveTimerDelay = ref(null);
+let autosaveIndicator = ref(null);
+
+
 const store = inject('store');
 
 let editor = {};
@@ -19,20 +30,24 @@ let currentHTML = '';
 let currentView = 'editor';
 const isAutoSaveRef = ref();
 
+// TODO this is sloppy
 const setTabView = (event) => {
   const value = event.target.value;
   currentView = value;
-  renderCodeMirror();
 
+  if (value === 'preview') {
+    componentState.isShowPreview = true;
+  }
+  else {
+    componentState.isShowPreview = false;
+  }
+  renderCodeMirror();
 };
 
 let isAutoSave = ref(true);
 
-setTimeout(() => {
-  console.log('| Timeout firing -- now --');
-  // renderCodeMirror();
 
-}, 2000);
+
 const previewEl = ref(null);
 const editorEl = ref(null);
 
@@ -54,90 +69,104 @@ const renderCodeMirror = () => {
 
   }
   else {
-  /**
-   * 
-   *  CODE MIRROR EDITOR
-   * 
-   * 
-   */
-   const code_mirror_el = document.getElementById('code_mirror_editor_el');
-   previewEl.value.innerHTML = null;
-    // let view = new EditorView({
-    //   doc: store?.state?.currentPost?.body,
-    //   extensions: [basicSetup, javascript()],
-    //   parent: el
-    // });
-    // editor.refresh();
+    /**
+     * 
+     *  CODE MIRROR EDITOR
+     * 
+     * 
+     */
+    const code_mirror_el = document.getElementById('code_mirror_editor_el');
+    previewEl.value.innerHTML = null;
     const editorValue = editor.state.doc.toString();
     editor.dispatch({
-          changes: {
-            from: 0,
-            to: editorValue.length,
-            insert: store?.state?.currentPost?.body || "",
-          },
-        })
-    // else {
-    //   console.warn('|  code mirror render called but no code mirror element');
-    // }
+      changes: {
+        from: 0,
+        to: editorValue.length,
+        insert: store?.state?.currentPost?.body || "",
+      },
+    });
 
   }
 
 };
 let sync_val = null;
-const editorState = EditorState.create({
-            doc: store?.state?.currentPost?.body,
-            extensions: [
-                EditorView.updateListener.of(function(e) {
-                    sync_val = e.state.doc.toString();
-                }),
-                basicSetup, markdown(),
-            ]
-        });
+const initialEditorState = {
+  doc: store?.state?.currentPost?.body,
+  extensions: [
+    EditorView.updateListener.of(function(e) {
+      sync_val = e.state.doc.toString();
+    }),
+    basicSetup, markdown(),
+  ]
+};
+const editorState = EditorState.create(initialEditorState);
 
 onMounted(() => {
-  console.log('| onMounted firing -- now -- title? ',  store?.state?.currentPost?.title);
-  console.log('| onMounted firing -- currentView ',  currentView );
+  autoSaveTimerDelay = DEFAULT_AUTOSAVE_MS;
   editor = new EditorView({
-        state: editorState,  
-        // doc: store?.state?.currentPost?.body,
-        // extensions: [basicSetup, markdown()],
-        parent: editorEl.value
-      });  
-});
-const currentPostDom = computed(() => {
-  console.log("computed currentPostDom");
-  let currentHTML = null;
-  if (store?.state?.currentPost?.body) {
-    marked.use(mangle());
-    marked.use(gfmHeadingId(markedOptions));
-    currentHTML = marked.parse(store?.state?.currentPost?.body);
+    state: editorState,  
+    parent: editorEl.value
+  });
+  if (isAutoSave && (typeof autosaveTimerRef !== 'number')) {
+   // if (!autosaveTimerRef) {
+      console.log('|  watch currentPost start autosave timer');
+      autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
+      console.log('|  watch currentPost start autosave timer  typeof ' );
+   // }
   }
-  return currentHTML;
+
+  document.addEventListener('visibilitychange', function(event) {
+    if (document.hidden) {
+      console.log('| GE4 tab is hidden - pausing autosave');
+      clearTimeout(autosaveTimerRef);
+    } else {
+      if (isAutoSave) {      
+        console.log('| GE4 tab is visible - restarting autosave');
+        autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
+      }
+    }
+  });  
 });
 
 const currentPost = computed(() => {
-  console.log('| computed currentPost');
   return store?.state?.currentPost?.body;
 });
 watch(isAutoSave, (value) => {
-  console.log('|');
-  console.log('|  it is working isAutoSave ', isAutoSave.value);
-  console.log('|');
+
+  if (!isAutoSave.value) {
+    clearTimeout(autosaveTimerRef);
+  }
+  else {
+    autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
+  }
 });
 watch(currentPost, (value) => {
-  console.log('|');
-  // console.log('|  WE HAVE A BODY ', value);
   renderCodeMirror();
-  console.log('|');
+  doTheSvg();
 });
 
-const toggleAutoSave = (event) => {
-  console.log('|');
-  console.log('| toggle auto save isAutoSaveRef.checked ', isAutoSaveRef.checked);
-  console.log('|');
-}
 
+const setSaveIndicator = (value) => {
+  componentState.isSaving = value;
+};
 
+const savePost = () => {
+
+  if (sync_val) {
+    // isSaving = true;
+    // isVisible = true;
+
+    setSaveIndicator(true);
+    store.methods.updateCurrentPostBody(sync_val);
+    store.methods.saveCurrentPost();
+
+    setTimeout(() => {
+      setSaveIndicator(false);
+      // isVisible = false;
+      // componentState.isSaving = false;
+    }, 3000)
+  }
+};
 
 const clearNew = () => {
   if (confirm('clear this post?')) {
@@ -146,31 +175,157 @@ const clearNew = () => {
 };
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let arc = ref(null);
+
+
+function degToRad (degrees) {
+  return degrees * Math.PI / 180;
+}
+
+// Returns a tween for a transition’s "d" attribute, transitioning any selected
+// arcs from their current angle to the specified new angle.
+function arcTween(newAngle, angle) {
+  return function(d) {
+    var interpolate = d3.interpolate(d[angle], newAngle);
+    return function(t) {
+      d[angle] = interpolate(t);
+      return arc(d);
+    };
+  };
+}
+
+const animationTime = 1200;
+const loaderRadius = 6;
+const loaderColor = '#ccc';
+
+const doTheSvg = () => {
+  arc = d3.arc()
+    .innerRadius(0)
+    .outerRadius(loaderRadius);
+
+var svg = d3.select("#thesvg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height"),
+    g = svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+var loader = g.append("path")
+    .datum({endAngle: 0, startAngle: 0})
+    .style("fill", loaderColor)
+    .attr("d", arc);
+
+d3.interval(function() {
+  loader.datum({endAngle: 0, startAngle: 0})
+  
+  loader.transition()
+      .duration(animationTime)
+      .attrTween("d", arcTween(degToRad(360), 'endAngle'));
+  
+   loader.transition()
+      .delay(animationTime)
+      .duration(animationTime)
+      .attrTween("d", arcTween(degToRad(360), 'startAngle'));
+}, animationTime * 2);
+
+
+};
+
+
+
+
+
+
+
+
 </script>
 <template>
   <div>Post Editor</div>
+  
   <button @click="clearNew">clear</button>
   <button value="editor" @click="setTabView">editor</button>
   <button value="preview" @click="setTabView">preview</button>
 
-  <h1 v-if="currentView === 'editor'">CodeMirror</h1>
-  <h1 v-else>preview</h1>
   <!-- marked preview -->
-  <div id="editor" ref="previewEl"></div>  
+  <div id="editor" ref="previewEl"></div> 
   <div data-id="editor_view_container">
-    <!-- codemirror edting -->
-    <div id="code_mirror_editor_el" ref="editorEl"></div>
-
-  </div>
-  <div>
-    <button>save</button>
-    <label>autosave<input type="checkbox" ref="isAutoSaveRef" v-model="isAutoSave" /></label>
+    <div data-id="editor_input_container">
+      <!-- codemirror edting -->
+      <div id="code_mirror_editor_el" ref="editorEl"></div>
+    </div>
+    <div data-id="editor_buttons_container">
+      <label>autosave<input type="checkbox" ref="isAutoSaveRef" v-model="isAutoSave" /></label>
+      <button data-id="editor_save_button" class="primary" @click="savePost">
+        <span>save</span>
+        <svg id="thesvg" ref="autosaveIndicator" :class="{ saving: componentState.isSaving }" width="20" height="20"></svg>
+      </button>
+    </div>
   </div>
 </template>
 <style scoped>
 [data-id="editor_view_container"] {
   border: 1px solid #eeeeee;
+  padding: 1rem;
+}
+[data-id="editor_input_container"] {
+  border: 1px solid #eeeeee;
   max-height: 500px;
   overflow-y: scroll;
+}
+[data-id="editor_buttons_container"] {
+  display: flex;
+  padding: 1rem;
+  justify-content: end;
+}
+[data-id="editor_buttons_container"] label {
+  display: flex;
+  padding: 0 1.5rem;
+  align-items: center;
+}
+[data-id="editor_save_button"] {
+  background: blue;
+  border: 1px solid #dddddd;
+  color: #ffffff;
+  display: flex;
+  padding-left: 1.6rem;
+  align-items: center;
+}
+[data-id="editor_save_button"]:hover {
+  background: #efefef;
+  border: 1px solid #eeeeee;
+  color: darkred;
+}
+[data-id="editor_save_button"]:active {
+  background: #444444;
+  border: 1px solid #000000;
+  color: #eeeeee;
+}
+[data-id="editor_save_button"] svg {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.5s linear;
+}
+[data-id="editor_save_button"] svg.saving {
+  visibility: visible;
+  opacity: .7;
+  transition: opacity 0.5s linear;
 }
 </style>
