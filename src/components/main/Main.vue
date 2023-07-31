@@ -12,7 +12,7 @@ uxMode = urlParams.get('mode');
 
 const currentPostId = urlParams.get('post');
 
-const isShowEditor = (uxMode === 'edit') && currentPostId;
+const isShowEditor = (uxMode === 'edit');
 if (isShowEditor) {
   store.methods.fetchPost(currentPostId);
 }
@@ -20,5 +20,16 @@ if (isShowEditor) {
 <template>
   <header><a href="/">Graffiti Engine</a></header>
   <PostEditor v-if="isShowEditor" />
-  <PostList />
+  <div class="ge4-layout-block">
+    <PostList />
+  </div>  
+
 </template>
+
+<style scoped>
+.ge4-layout-block {
+  display: grid;
+  grid-auto-rows: 1fr;
+  justify-content: center;
+}
+</style>

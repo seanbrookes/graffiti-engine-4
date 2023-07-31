@@ -1,6 +1,7 @@
 <script setup>
 import { ref, inject, reactive, watch } from 'vue';
 import { LengthViz } from './';
+import { clearNew } from '../../ge4-helpers';
 
 const store = inject('store');
 
@@ -50,10 +51,22 @@ const editPost = (event) => {
 
 <template>
   <div data-id="post_list_container">
-    <h2>Post list</h2>
-    <div style="text-align: left"><input data-id="post_list_search_input" type="text" @input="searchTextInput" :value="store.state.searchText" /><button @click="clearSearchText">X</button></div>
+    <div data-id="component-header">
+      <h2>Post list</h2>
+    </div>    
+    <div data-id="post_list_search_container">
+      <input
+        placeholder="search..."
+        data-id="post_list_search_input"
+        type="text"
+        @input="searchTextInput"
+        :value="store.state.searchText"
+      />
+      <button @click="clearSearchText">X</button>
+      <button @click="clearNew">new post</button>
+    </div>
     <table>
-      <thead>
+      <thead class="sticky-head">
         <tr>
           <th></th>
           <th>
@@ -92,12 +105,33 @@ const editPost = (event) => {
 </template>
 
 <style scoped>
+.sticky-head {
+  position: sticky;
+  top: 0;
+}
 [data-id="post_list_container"] {
   padding: 2rem 6rem 0 6rem;
   border: 1px solid #eeeeee;
   border-radius: 1rem;
   display: grid;
   max-width: 55rem;
+}
+[data-id="post_list_search_container"] {
+  display: flex;
+  align-items: center;
+  padding: 0 0 .3rem 0;
+  gap: .2rem;
+}
+[data-id="post_list_search_container"] button {
+  border-color: #eeeeee;
+}
+[data-id="component-header"] h2 {
+  font-size: 14px;
+  color: #aaaaaa;
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  font-weight: 400;
 }
 caption {
   text-align: left;
