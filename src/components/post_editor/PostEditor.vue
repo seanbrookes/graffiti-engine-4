@@ -7,6 +7,7 @@ import {EditorState} from "@codemirror/state"
 import { marked } from 'marked';
 import { mangle } from "marked-mangle";
 import { gfmHeadingId } from "marked-gfm-heading-id";
+import { clearNew } from '../../ge4-helpers';
 
 const markedOptions = {
   prefix: 'gfe-',
@@ -15,12 +16,15 @@ const markedOptions = {
 const componentState = reactive({
   isSaving: false,
   isShowPreview: false,
+  previewToggleText: 'preview',
+  currentPostTitle: '',
 });
 
 const DEFAULT_AUTOSAVE_MS = 60000;
 let autosaveTimerRef = ref(null);
 let autoSaveTimerDelay = ref(null);
 let autosaveIndicator = ref(null);
+let postTitleInputEl = ref(null);
 
 
 const store = inject('store');
@@ -31,16 +35,8 @@ let currentView = 'editor';
 const isAutoSaveRef = ref();
 
 // TODO this is sloppy
-const setTabView = (event) => {
-  const value = event.target.value;
-  currentView = value;
-
-  if (value === 'preview') {
-    componentState.isShowPreview = true;
-  }
-  else {
-    componentState.isShowPreview = false;
-  }
+const toggleTabView = () => {
+  componentState.isShowPreview = !componentState.isShowPreview;
   renderCodeMirror();
 };
 
@@ -52,15 +48,15 @@ const previewEl = ref(null);
 const editorEl = ref(null);
 
 const renderCodeMirror = () => {
-  console.log('| renderCodeMirror currentView ', currentView);
+  console.log('| renderCodeMirror componentState.isShowPreview ', componentState.isShowPreview);
   /**
    * 
    *  MARKED EDITOR
    * 
    * 
    */
-
-  if (currentView === 'preview') {
+  if (componentState.isShowPreview) {
+    componentState.previewToggleText = 'edit';
     const editorEl = document.getElementById('editor');
     marked.use(mangle());
     marked.use(gfmHeadingId(markedOptions));
@@ -69,25 +65,24 @@ const renderCodeMirror = () => {
 
   }
   else {
-    /**
-     * 
-     *  CODE MIRROR EDITOR
-     * 
-     * 
-     */
-    const code_mirror_el = document.getElementById('code_mirror_editor_el');
     previewEl.value.innerHTML = null;
-    const editorValue = editor.state.doc.toString();
-    editor.dispatch({
-      changes: {
-        from: 0,
-        to: editorValue.length,
-        insert: store?.state?.currentPost?.body || "",
-      },
-    });
-
   }
-
+  /**
+   * 
+   *  CODE MIRROR EDITOR
+   * 
+   * 
+   */
+  const code_mirror_el = document.getElementById('code_mirror_editor_el');  
+  componentState.currentPostTitle = store?.state?.currentPost?.title;
+  const editorValue = editor.state.doc.toString();
+  editor.dispatch({
+    changes: {
+      from: 0,
+      to: editorValue.length,
+      insert: store?.state?.currentPost?.body || "",
+    },
+  });
 };
 let sync_val = null;
 const initialEditorState = {
@@ -103,16 +98,14 @@ const editorState = EditorState.create(initialEditorState);
 
 onMounted(() => {
   autoSaveTimerDelay = DEFAULT_AUTOSAVE_MS;
+  // initialize codemirror editor
   editor = new EditorView({
     state: editorState,  
     parent: editorEl.value
   });
+  // start autosave
   if (isAutoSave && (typeof autosaveTimerRef !== 'number')) {
-   // if (!autosaveTimerRef) {
-      console.log('|  watch currentPost start autosave timer');
-      autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
-      console.log('|  watch currentPost start autosave timer  typeof ' );
-   // }
+    autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
   }
 
   document.addEventListener('visibilitychange', function(event) {
@@ -157,6 +150,7 @@ const savePost = () => {
     // isVisible = true;
 
     setSaveIndicator(true);
+    store.methods.updateCurrentPostTitle(componentState.currentPostTitle);
     store.methods.updateCurrentPostBody(sync_val);
     store.methods.saveCurrentPost();
 
@@ -165,12 +159,6 @@ const savePost = () => {
       // isVisible = false;
       // componentState.isSaving = false;
     }, 3000)
-  }
-};
-
-const clearNew = () => {
-  if (confirm('clear this post?')) {
-    document.location.href = '/';
   }
 };
 
@@ -250,23 +238,26 @@ d3.interval(function() {
 };
 
 
-
-
-
-
-
-
 </script>
-<template>
-  <div>Post Editor</div>
-  
-  <button @click="clearNew">clear</button>
-  <button value="editor" @click="setTabView">editor</button>
-  <button value="preview" @click="setTabView">preview</button>
 
+
+<template>
+  <div data-id="component-header">
+    <h2>Editor</h2>
+    <button @click="clearNew"><img height="16" width="16" src="../../assets/greyx.svg"/></button>
+  </div>
+  <div class="sticky-head" data-id="editor-controls-container">
+    <button @click="clearNew">New</button>
+    <!-- <button value="editor" @click="setTabView">editor</button>-->
+    <button value="preview" @click="toggleTabView">{{ componentState.previewToggleText }}</button>
+  </div>
   <!-- marked preview -->
   <div id="editor" ref="previewEl"></div> 
   <div data-id="editor_view_container">
+    <div data-id="editor_title_input_container">
+      <label>Title</label>
+      <input v-model="componentState.currentPostTitle" type="text" data-id="post_title_text_input" ref="postTitleInputEl" />
+    </div>
     <div data-id="editor_input_container">
       <!-- codemirror edting -->
       <div id="code_mirror_editor_el" ref="editorEl"></div>
@@ -280,9 +271,84 @@ d3.interval(function() {
     </div>
   </div>
 </template>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <style scoped>
+.sticky-head {
+  position: sticky;
+  top: 0;
+}
+[data-id="editor_title_input_container"] {
+  display: flex;
+  align-items: center;
+  padding: .3rem 0;
+  gap: .5rem;
+}
+[data-id="editor_title_input_container"] input {
+  width: 100%;
+  padding: .2rem;
+  line-height: 1.5;
+  border: 1px solid #dddddd;
+  border-radius: .2rem;
+
+}
+[data-id="editor_title_input_container"] label {
+  font-size: 11px;
+  color: #777777;
+  text-transform: uppercase;
+  font-family: 'Courier New', Courier, monospace;
+}
+[data-id="component-header"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1rem;
+}
+[data-id="component-header"] h2 {
+  font-size: 14px;
+  color: #aaaaaa;
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  font-weight: 400;
+}
+[data-id="component-header"] button {
+  border: 0;
+}
+[data-id="editor-controls-container"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1rem;
+}
 [data-id="editor_view_container"] {
-  border: 1px solid #eeeeee;
   padding: 1rem;
 }
 [data-id="editor_input_container"] {
