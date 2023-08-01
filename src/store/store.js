@@ -232,15 +232,38 @@ const methods = {
     return fetchPost(postId);
   },
 
+  /**
+   * Three main cases
+   * - no post body - reject by default but may be a future use case to support where users will want to delete full content
+   * - no state.currentPost.body - this is new post so just assign and flag as dirty
+   * - update - confirm we have a change and set dirty if necessary
+   * 
+   * 
+   * @param {Object} postBody - outbout (markdown) from CodeMirror editor wrapper PostEditor
+   * @returns 
+   */
   updateCurrentPostBody (postBody) {
-    const currentPostBody = state.currentPost.body;
-    if (currentPostBody.length === postBody.length) {
-      // post body has not changed
-      state.currentPostBodyHasChanged = false;  
+    // no body, no post
+    // TODO potential issue with 'deleting' all of a post - could just leave behind a single character?)
+    // punt for now
+    if (!postBody) {
+      console.warn('| updateCurrentPostBody called with no postBody value');
       return;
     }
-    state.currentPostBodyHasChanged = true;
-    state.currentPost.body = postBody;
+    // new post
+    if (!state.currentPost.body) {
+      state.currentPost.body = postBody;
+      state.currentPostBodyHasChanged = true;
+      return;
+    }
+    // update current post
+    if (state.currentPost.body && (state.currentPost.body.length !== postBody.length)) {
+      state.currentPost.body = postBody;
+      state.currentPostBodyHasChanged = true;
+      return;
+    }
+    state.currentPostBodyHasChanged = false;
+    return;
   },
 
   updateCurrentPostTitle (postTitle) {

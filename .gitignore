@@ -47,5 +47,6 @@ npm-debug.log
 /config
 /server/config.js
 /config
+/public/images
 
 /four_five_six_config
