@@ -297,7 +297,7 @@ server.post('/api/posts', (req, res) => {
     if (err) throw err;  
   
   //  console.log("Done writing"); // Success 
-    res.send({status: 200, message: 'saved'});
+    res.send({status: 200, message: 'saved', post: freshPost});
   });
 
 });
