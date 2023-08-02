@@ -247,7 +247,7 @@ d3.interval(function() {
     <button @click="clearNew"><img height="16" width="16" src="../../assets/greyx.svg"/></button>
   </div>
   <div class="sticky-head" data-id="editor-controls-container">
-    <button @click="clearNew">New</button>
+    <button @click="clearNew">new post</button>
     <!-- <button value="editor" @click="setTabView">editor</button>-->
     <button value="preview" @click="toggleTabView">{{ componentState.previewToggleText }}</button>
   </div>

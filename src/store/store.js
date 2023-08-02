@@ -54,7 +54,13 @@ const sortAlgo = (a, b) => {
     })
     .then(data => {
       console.log('save post Success:', data);
-      // state.currentPost = data;
+      if (!state.currentPost.id && data.post.id) {
+        window.document.location = `./?mode=edit&post=${data.post.id}`;
+      }
+      if (state.currentPostTitleHasChanged) {
+        fetchPosts();
+      }
+      
     })
     .catch((error) => {
       console.error('| save posts error:', error);

@@ -55,14 +55,16 @@ const editPost = (event) => {
       <h2>Post list</h2>
     </div>    
     <div data-id="post_list_search_container">
-      <input
-        placeholder="search..."
-        data-id="post_list_search_input"
-        type="text"
-        @input="searchTextInput"
-        :value="store.state.searchText"
-      />
-      <button @click="clearSearchText">X</button>
+      <div class="flex">
+        <input
+          placeholder="search..."
+          data-id="post_list_search_input"
+          type="text"
+          @input="searchTextInput"
+          :value="store.state.searchText"
+        />
+        <button @click="clearSearchText">X</button>
+      </div>
       <button @click="clearNew">new post</button>
     </div>
     <table>
@@ -85,7 +87,7 @@ const editPost = (event) => {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(post, index) in store.state.postList" :key="post.id">
+        <tr v-for="(post, index) in store.state.postList" :key="post.id" :class="[post.id === store.state?.currentPost?.id ? 'post-row-highlight' : '']">
           <td style="text-align: right; font-size: 9px; padding-right: .2rem">{{ index + 1 }})</td>
           <td>
             <button @click="editPost" :value="post.id" data-id="post_list_title_button" :title="post.title">{{ post.title }}</button>
@@ -122,6 +124,20 @@ const editPost = (event) => {
   padding: 0 0 .3rem 0;
   gap: .2rem;
 }
+.flex {
+  display: flex;
+  align-items: center;
+}
+[data-id="post_list_search_container"] {
+  display: flex;
+  align-items: center;
+  padding: 0 0 .3rem 0;
+  gap: .2rem;
+  justify-content: space-between;
+}
+[data-id="post_list_search_container"] .flex {
+  gap: .2rem;
+}
 [data-id="post_list_search_container"] button {
   border-color: #eeeeee;
 }
@@ -136,6 +152,7 @@ const editPost = (event) => {
 caption {
   text-align: left;
 }
+
 td {
   padding: .3rem;
 }
@@ -147,7 +164,9 @@ button.post-title {
 tr:nth-child(odd) {
   background-color: #e8e8e8;
 }
-
+tr.post-row-highlight {
+  background-color: rgb(218, 230, 238);
+}
 [data-id="post_list_title_button"] {
   max-width: 30rem;
   white-space: nowrap;
