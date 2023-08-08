@@ -10,6 +10,7 @@ const state = reactive({
   currentPostBodyHasChanged: false,
   currentPostTitleHasChanged: false,
   maxCharCount: 0,
+  isShowVectorEditor: false,
 });
 const postsServiceEndpoint = 'http://localhost:4444/api/posts';
 
@@ -286,6 +287,14 @@ const methods = {
     if (state.currentPost) {
       return savePost(state.currentPost);
     }
+  },
+
+  openVectorEditor () {
+    state.isShowVectorEditor = true;
+  },
+
+  closeVectorEditor () {
+    state.isShowVectorEditor = false;
   },
 };
 

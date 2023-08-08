@@ -55,3 +55,5 @@ interesting reads:
 
 [attribution - loading svg spnner code pen](https://codepen.io/ronnidc/pen/qmyzwv)
 [attribution - grey x svg (openclipart.org)](https://openclipart.org/download/324409/greyx.svg)
+
+[Excalidraw](https://github.com/excalidraw/excalidraw)

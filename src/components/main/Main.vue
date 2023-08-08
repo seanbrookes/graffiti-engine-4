@@ -1,6 +1,7 @@
 <script setup>
 import { PostList } from '../post_list/';
 import { PostEditor } from '../post_editor/';
+import { VectorEditor } from '../vector_editor';
 import { ref, inject, reactive, watch } from 'vue';
 
 const store = inject('store');
@@ -19,6 +20,9 @@ if (isShowEditor) {
 </script>
 <template>
   <header><a href="/">Graffiti Engine</a></header>
+  <VectorEditor />
+  <!-- <inline-draw />
+  <test-component />  -->
   <PostEditor v-if="isShowEditor" />
   <div class="ge4-layout-block">
     <PostList />

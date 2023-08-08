@@ -1,5 +1,5 @@
 <script setup>
-import { ref, inject, reactive, watch, computed, onMounted } from 'vue';
+import { ref, inject, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
 import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown } from '@codemirror/lang-markdown';
@@ -18,6 +18,7 @@ const componentState = reactive({
   isShowPreview: false,
   previewToggleText: 'preview',
   currentPostTitle: '',
+  isActivelyEditing: false,
 });
 
 const DEFAULT_AUTOSAVE_MS = 60000;
@@ -60,7 +61,7 @@ const renderCodeMirror = () => {
     const editorEl = document.getElementById('editor');
     marked.use(mangle());
     marked.use(gfmHeadingId(markedOptions));
-    const currentHTML = marked.parse(store?.state?.currentPost?.body);    
+    const currentHTML = store?.state?.currentPost?.body ? marked.parse(store?.state?.currentPost?.body) : '';    
     previewEl.value.innerHTML = currentHTML;
 
   }
@@ -98,6 +99,7 @@ const editorState = EditorState.create(initialEditorState);
 
 onMounted(() => {
   autoSaveTimerDelay = DEFAULT_AUTOSAVE_MS;
+
   // initialize codemirror editor
   editor = new EditorView({
     state: editorState,  
@@ -118,7 +120,23 @@ onMounted(() => {
         autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
       }
     }
-  });  
+  });
+  document.addEventListener('keypress', typingStatus);
+
+  document.querySelector('[data-id="editor_input_container"]').style.resize = 'vertical';
+});
+
+const typingStatus = () => {
+  // set type status to active
+  componentState.isActivelyEditing = true;
+  // reset timer to turn typing status active to false
+  setTimeout(() => {
+    componentState.isActivelyEditing = false;
+  }, 6000);
+};
+
+onUnmounted(() => {
+  document.removeEventListener('keypress', typingStatus);   
 });
 
 const currentPost = computed(() => {
@@ -144,11 +162,10 @@ const setSaveIndicator = (value) => {
 };
 
 const savePost = () => {
-
+  if (componentState.isActivelyEditing) {
+    return;
+  }
   if (sync_val) {
-    // isSaving = true;
-    // isVisible = true;
-
     setSaveIndicator(true);
     store.methods.updateCurrentPostTitle(componentState.currentPostTitle);
     store.methods.updateCurrentPostBody(sync_val);
@@ -156,13 +173,13 @@ const savePost = () => {
 
     setTimeout(() => {
       setSaveIndicator(false);
-      // isVisible = false;
-      // componentState.isSaving = false;
     }, 3000)
   }
 };
 
-
+const openVectorEditor = () => {
+  store.methods.openVectorEditor();
+};
 
 
 
@@ -244,7 +261,10 @@ d3.interval(function() {
 <template>
   <div data-id="component-header">
     <h2>Editor</h2>
-    <button @click="clearNew"><img height="16" width="16" src="../../assets/greyx.svg"/></button>
+    <div class="flex">
+      <button @click="openVectorEditor"><img height="16" width="16" src="../../assets/draw.svg"/></button>
+      <button @click="clearNew"><img height="16" width="16" src="../../assets/greyx.svg"/></button>
+    </div>
   </div>
   <div class="sticky-head" data-id="editor-controls-container">
     <button @click="clearNew">new post</button>
@@ -325,23 +345,9 @@ d3.interval(function() {
   text-transform: uppercase;
   font-family: 'Courier New', Courier, monospace;
 }
-[data-id="component-header"] {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 1rem;
-}
-[data-id="component-header"] h2 {
-  font-size: 14px;
-  color: #aaaaaa;
-  font-family: 'Courier New', Courier, monospace;
-  text-transform: uppercase;
-  letter-spacing: 4px;
-  font-weight: 400;
-}
-[data-id="component-header"] button {
-  border: 0;
-}
+
+
+
 [data-id="editor-controls-container"] {
   display: flex;
   justify-content: space-between;
@@ -353,7 +359,7 @@ d3.interval(function() {
 }
 [data-id="editor_input_container"] {
   border: 1px solid #eeeeee;
-  max-height: 500px;
+  height: 500px;
   overflow-y: scroll;
 }
 [data-id="editor_buttons_container"] {
