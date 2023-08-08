@@ -141,14 +141,7 @@ const editPost = (event) => {
 [data-id="post_list_search_container"] button {
   border-color: #eeeeee;
 }
-[data-id="component-header"] h2 {
-  font-size: 14px;
-  color: #aaaaaa;
-  font-family: 'Courier New', Courier, monospace;
-  text-transform: uppercase;
-  letter-spacing: 4px;
-  font-weight: 400;
-}
+
 caption {
   text-align: left;
 }
