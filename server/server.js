@@ -12,7 +12,7 @@ import { parse } from 'parse5';
 
 
 
-import config from './config.js';
+// import config from './config.js';
 /**
  * This is the main backend file for GE
  * I handles fetching, saving, editing, publishing, painting, etc for the local post data
