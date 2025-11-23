@@ -13,6 +13,7 @@ const state = reactive({
   isShowVectorEditor: false,
 });
 const postsServiceEndpoint = 'http://localhost:4444/api/posts';
+const generateStagingEndpoint = 'http://localhost:4444/api/generatestaging';
 
 // /api/post/
 
@@ -94,6 +95,28 @@ const fetchPost = async (postId) => {
       console.error('| fetch posts error:', error);
       return null;
     });
+};
+
+const generateStaging = async () => {
+  const response = fetch(generateStagingEndpoint, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  })
+  .then((response) => {
+    console.log('generate staging response status', response.status);
+    if (response.status !== 200) {
+      throw response;
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log('generate stagin success:', data);
+  })
+  .catch((error) => {
+    console.error('| fetch posts error:', error);
+  });
 };
 
 const fetchPosts = async () => {
@@ -209,6 +232,10 @@ const sortTheList = () => {
 const methods = {
   fetchPosts () {
     return fetchPosts();
+  },
+
+  generateStagingSite () {
+    return generateStaging();
   },
 
   getData1 () {

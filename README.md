@@ -36,6 +36,13 @@ then underscore _.template to merge with base page template
   const publishDoc = compiled(post);
 ```
 
+## Staging 
+Added another web server 'local-web-cloud' to allow for  staging and simulation of publish and render to confirm the post output site works and the new home page and post pages have been rendered
+```
+$npm run server/staging  // will start a web server on port 8888 pointing to <project-root>/local-web-cloud folder
+```
+
+
 Not part of the publish flow but needed as a utility sometimes
 HTML to markdown converter
 ```
@@ -57,3 +64,6 @@ interesting reads:
 [attribution - grey x svg (openclipart.org)](https://openclipart.org/download/324409/greyx.svg)
 
 [Excalidraw](https://github.com/excalidraw/excalidraw)
+
+VectorEditor is an external project called called inline-draw that must be opened and running on: localhost:3742
+- it is based on a WebComponent wrapper around Excalidraw.  

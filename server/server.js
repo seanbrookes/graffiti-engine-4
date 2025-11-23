@@ -11,7 +11,16 @@ import { parse } from 'parse5';
 
 
 
+// TODO - this will need to be more dynamic
+const PORT = 4444;
+const server = express();
+server.use(express.json());
+/*
 
+So, bodyParser.json() and bodyParser.urlencoded() are built into Express as express.json() and express.urlencoded() so you don't have to import body-parser at all.
+*/
+server.use(cors());
+const converter = new showdown.Converter();
 // import config from './config.js';
 /**
  * This is the main backend file for GE
@@ -19,142 +28,118 @@ import { parse } from 'parse5';
  */
 
 
-function toJSON(node) {
-  let propFix = { for: 'htmlFor', class: 'className' };
-  let specialGetters = {
-    style: (node) => node.style.cssText,
-  };
-  let attrDefaultValues = { style: '' };
-  let obj = {
-    nodeType: node.nodeType,
-  };
-  if (node.tagName) {
-    obj.tagName = node.tagName.toLowerCase();
-  } else if (node.nodeName) {
-    obj.nodeName = node.nodeName;
-  }
-  if (node.nodeValue) {
-    obj.nodeValue = node.nodeValue;
-  }
-  let attrs = node.attributes;
-  if (attrs) {
-    let defaultValues = new Map();
-    for (let i = 0; i < attrs.length; i++) {
-      let name = attrs[i].nodeName;
-      defaultValues.set(name, attrDefaultValues[name]);
-    }
-    // Add some special cases that might not be included by enumerating
-    // attributes above. Note: this list is probably not exhaustive.
-    switch (obj.tagName) {
-      case 'input': {
-        if (node.type === 'checkbox' || node.type === 'radio') {
-          defaultValues.set('checked', false);
-        } else if (node.type !== 'file') {
-          // Don't store the value for a file input.
-          defaultValues.set('value', '');
-        }
-        break;
-      }
-      case 'option': {
-        defaultValues.set('selected', false);
-        break;
-      }
-      case 'textarea': {
-        defaultValues.set('value', '');
-        break;
-      }
-    }
-    let arr = [];
-    for (let [name, defaultValue] of defaultValues) {
-      let propName = propFix[name] || name;
-      let specialGetter = specialGetters[propName];
-      let value = specialGetter ? specialGetter(node) : node[propName];
-      if (value !== defaultValue) {
-        arr.push([name, value]);
-      }
-    }
-    if (arr.length) {
-      obj.attributes = arr;
-    }
-  }
-  let childNodes = node.childNodes;
-  // Don't process children for a textarea since we used `value` above.
-  if (obj.tagName !== 'textarea' && childNodes && childNodes.length) {
-    let arr = (obj.childNodes = []);
-    for (let i = 0; i < childNodes.length; i++) {
-      arr[i] = toJSON(childNodes[i]);
-    }
-  }
-  return obj;
-}
+// function toJSON(node) {
+//   let propFix = { for: 'htmlFor', class: 'className' };
+//   let specialGetters = {
+//     style: (node) => node.style.cssText,
+//   };
+//   let attrDefaultValues = { style: '' };
+//   let obj = {
+//     nodeType: node.nodeType,
+//   };
+//   if (node.tagName) {
+//     obj.tagName = node.tagName.toLowerCase();
+//   } else if (node.nodeName) {
+//     obj.nodeName = node.nodeName;
+//   }
+//   if (node.nodeValue) {
+//     obj.nodeValue = node.nodeValue;
+//   }
+//   let attrs = node.attributes;
+//   if (attrs) {
+//     let defaultValues = new Map();
+//     for (let i = 0; i < attrs.length; i++) {
+//       let name = attrs[i].nodeName;
+//       defaultValues.set(name, attrDefaultValues[name]);
+//     }
+//     // Add some special cases that might not be included by enumerating
+//     // attributes above. Note: this list is probably not exhaustive.
+//     switch (obj.tagName) {
+//       case 'input': {
+//         if (node.type === 'checkbox' || node.type === 'radio') {
+//           defaultValues.set('checked', false);
+//         } else if (node.type !== 'file') {
+//           // Don't store the value for a file input.
+//           defaultValues.set('value', '');
+//         }
+//         break;
+//       }
+//       case 'option': {
+//         defaultValues.set('selected', false);
+//         break;
+//       }
+//       case 'textarea': {
+//         defaultValues.set('value', '');
+//         break;
+//       }
+//     }
+//     let arr = [];
+//     for (let [name, defaultValue] of defaultValues) {
+//       let propName = propFix[name] || name;
+//       let specialGetter = specialGetters[propName];
+//       let value = specialGetter ? specialGetter(node) : node[propName];
+//       if (value !== defaultValue) {
+//         arr.push([name, value]);
+//       }
+//     }
+//     if (arr.length) {
+//       obj.attributes = arr;
+//     }
+//   }
+//   let childNodes = node.childNodes;
+//   // Don't process children for a textarea since we used `value` above.
+//   if (obj.tagName !== 'textarea' && childNodes && childNodes.length) {
+//     let arr = (obj.childNodes = []);
+//     for (let i = 0; i < childNodes.length; i++) {
+//       arr[i] = toJSON(childNodes[i]);
+//     }
+//   }
+//   return obj;
+// }
 
-function toDOM(input) {
-  let obj = typeof input === 'string' ? JSON.parse(input) : input;
-  let propFix = { for: 'htmlFor', class: 'className' };
-  let node;
-  let nodeType = obj.nodeType;
-  switch (nodeType) {
-    // ELEMENT_NODE
-    case 1: {
-      node = document.createElement(obj.tagName);
-      if (obj.attributes) {
-        for (let [attrName, value] of obj.attributes) {
-          let propName = propFix[attrName] || attrName;
-          // Note: this will throw if setting the value of an input[type=file]
-          node[propName] = value;
-        }
-      }
-      break;
-    }
-    // TEXT_NODE
-    case 3: {
-      return document.createTextNode(obj.nodeValue);
-    }
-    // COMMENT_NODE
-    case 8: {
-      return document.createComment(obj.nodeValue);
-    }
-    // DOCUMENT_FRAGMENT_NODE
-    case 11: {
-      node = document.createDocumentFragment();
-      break;
-    }
-    default: {
-      // Default to an empty fragment node.
-      return document.createDocumentFragment();
-    }
-  }
-  if (obj.childNodes && obj.childNodes.length) {
-    for (let childNode of obj.childNodes) {
-      node.appendChild(toDOM(childNode));
-    }
-  }
-  return node;
-}
-
-
-
-
-
-
-
-
-
-// TODO - this will need to be more dynamic
-const PORT = 4444;
-
-const server = express();
-server.use(express.json());
-// server.use(express.urlencoded({ extended: true }));
-/*
-
-So, bodyParser.json() and bodyParser.urlencoded() are built into Express as express.json() and express.urlencoded() so you don't have to import body-parser at all.
-*/
-// server.use(bodyParser.urlencoded({ extended: true }));
-// server.use(bodyParser.json());
-// server.use(bodyParser.raw());
-server.use(cors());
-const converter = new showdown.Converter();
+// function toDOM(input) {
+//   let obj = typeof input === 'string' ? JSON.parse(input) : input;
+//   let propFix = { for: 'htmlFor', class: 'className' };
+//   let node;
+//   let nodeType = obj.nodeType;
+//   switch (nodeType) {
+//     // ELEMENT_NODE
+//     case 1: {
+//       node = document.createElement(obj.tagName);
+//       if (obj.attributes) {
+//         for (let [attrName, value] of obj.attributes) {
+//           let propName = propFix[attrName] || attrName;
+//           // Note: this will throw if setting the value of an input[type=file]
+//           node[propName] = value;
+//         }
+//       }
+//       break;
+//     }
+//     // TEXT_NODE
+//     case 3: {
+//       return document.createTextNode(obj.nodeValue);
+//     }
+//     // COMMENT_NODE
+//     case 8: {
+//       return document.createComment(obj.nodeValue);
+//     }
+//     // DOCUMENT_FRAGMENT_NODE
+//     case 11: {
+//       node = document.createDocumentFragment();
+//       break;
+//     }
+//     default: {
+//       // Default to an empty fragment node.
+//       return document.createDocumentFragment();
+//     }
+//   }
+//   if (obj.childNodes && obj.childNodes.length) {
+//     for (let childNode of obj.childNodes) {
+//       node.appendChild(toDOM(childNode));
+//     }
+//   }
+//   return node;
+// }
 
 const getSlug = (title) => {
   // replace spaces with dashes
@@ -171,11 +156,158 @@ const guid = () => {
   return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
 };
 
+const getPublishedPosts = () => {
+  const dir = './server/posts/';
+  let files;
+  let returnError;
+  console.log('| 1');
+ 
+  try {
+    files = fs.readdirSync(dir);
+  }
+  catch(error) {
+    returnError = error;
+  }
+ 
+  const postCollection = [];
+ 
+  if (files) {
+    try {
+      // files object contains all files names
+      files.forEach(file => {
+        // console.log('reading file', file);
+        try {
+          const data = fs.readFileSync('./server/posts/' + file);
+          const parsedPostData = JSON.parse(data);
+          if (parsedPostData && parsedPostData?.status && parsedPostData.status === 'published') {
+            postCollection.push(JSON.parse(data));
+          }
+        } catch (err) {
+          returnError = err;
+        }
+      });
+
+    }
+    catch(error) {
+      console.log('| Error iterating over the files', error);
+      returnError = error;
+    }
+  }
+  return postCollection;
+};
+
+// New helper to calculate the link path
+const getPostLink = (post) => {
+  const pDate = new Date(post.publishDate);
+  const pubYear = pDate.getFullYear();
+  const pubMonth = (pDate.getMonth() + 1);
+  // Use year/month/slug.html structure to match the inbox file saving path.
+  return `${pubYear}/${pubMonth}/${post.slug}.html`;
+};
+
+/**
+ * COMPILE INDEX FROM TEMPLATE
+ * Takes a list of published posts, generates the index markup, and compiles it 
+ * into a full HTML document using the index template.
+ * * @param {Array<Object>} posts - sorted list of published posts.
+ * @returns {string} - fully compiled/valid index.html document.
+ */
+const getCompiledIndex = async (posts) => {
+  // NOTE: indexTemplate.html is required in the ./server/templates folder.
+  // Changed to use the user-provided homeTemplate.html
+  const templateData = fs.readFileSync('./server/templates/homeTemplate.html', 'utf8');
+  let listMarkup = '<ul class="Blog__HomePostList">';
+
+  // Logic based on the original system: first 3 posts full content, the rest are links
+  for (let i = 0; i < posts.length; i++) {
+    const post = posts[i];
+    const postLink = getPostLink(post);
+    const pDate = new Date(post.publishDate);
+    // Simple date format for display on index
+    const publishDate = `${pDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    
+    // Ensure post has necessary fields
+    if (!post.body || !post.title) continue;
+
+    listMarkup += '<li class="Layout Spread Flow">';
+
+    if (i < 3) {
+      // First 3: Full content (convert markdown to HTML now)
+      // This is a simplified version of the old logic: full post body is included.
+      const postHtmlBody = converter.makeHtml(post.body);
+
+      listMarkup += `<a href="${postLink}" class="Blog__HomePostTitle"><h3 class="Blog__HomePostTitle">${post.title}</h3></a>`;
+      listMarkup += `<span>published: ${publishDate}</span>`;
+      listMarkup += `<div>${postHtmlBody}</div>`;
+      
+    } else {
+      // Remaining posts: Just a link and publish date
+      listMarkup += `<a href="${postLink}" class="Blog__HomePostTitle">${post.title}</a>`;
+      listMarkup += `<span>published: ${publishDate}</span>`;
+    }
+
+    listMarkup += '</li>';
+  }
+  listMarkup += '</ul>';
+
+  const indexData = {
+    // The compiled post list will be available in the template as `markup`
+    markup: listMarkup
+  };
+
+  const compiled = _.template(templateData);
+  const publishDoc = compiled(indexData);
+  
+  return publishDoc;
+};
+
+/**
+ * Orchestrates the full process of generating the index.html and sending it to the inbox.
+ * @param {Object} targetConfig - The configuration object for the target host/port/key/logging.
+ */
+const generateHomePage = async (targetConfig) => {
+  try {
+    const publishedPosts = getPublishedPosts();
+    console.log(`| generateHomePage: Found ${publishedPosts.length} published posts.`);
+    
+    if (publishedPosts.length === 0) {
+        console.log('| generateHomePage: No posts to generate index from. Skipping.');
+        return;
+    }
+
+    // 1. Sort posts by publishDate descending (newest first)
+    publishedPosts.sort((a, b) => new Date(b.publishDate) - new Date(a.publishDate));
+    
+    // 2. Compile the Index Document
+    const indexDoc = await getCompiledIndex(publishedPosts);
+    
+    // 3. Prepare POST data for inbox.js
+    const rawPostData = {
+      ApiKey: targetConfig.apiKey || '__DEV_KEY__', 
+      IsLogging: targetConfig.isLoggingOn || 'true',
+      IsIndex: 'true', // Flag to tell inbox.js this is the index file
+      // These fields are required by inbox.js but unused for index
+      PostPublishYear: 'N/a', 
+      PostPublishMonth: 'N/a',
+      PostSlug: 'index', 
+      PostBody: indexDoc
+    };
+    
+    // 4. Send the POST request
+    const post_data = querystring.stringify(rawPostData);
+    await postToStaging(post_data);
+    
+    console.log('| generateHomePage: Successfully posted index.html to staging.');
+    
+  } catch (error) {
+    console.error('| generateHomePage failed:', error);
+  }
+};
 
 
-/* 
 
-  GET THE POSTS
+
+/* GET THE POSTS
 
 */
 server.get('/api/posts', (req, res) => {
@@ -223,9 +355,7 @@ server.get('/api/posts', (req, res) => {
   }
 });
 
-/* 
-
-  GET SINGLE POST
+/* GET SINGLE POST
 
 */
 server.get('/api/post/:id', (req, res) => {
@@ -252,9 +382,7 @@ server.get('/api/post/:id', (req, res) => {
 
 
 
-/* 
-
-  SAVE POST
+/* SAVE POST
 
 */
 server.post('/api/posts', (req, res) => {
@@ -302,11 +430,7 @@ server.post('/api/posts', (req, res) => {
 
 });
 
-/* 
-
-  PAINT POST
-
-
+/* PAINT POST
   Straight up repaint, no updates to meta data or edits to post.  
   Generally for use cases where we want to simply replace a previously published post
   Possbily the site has moved and needs to be 'repainted' or a post was written to the wrong folder
@@ -413,7 +537,7 @@ server.get('/api/paintpost/:id', (req, res) => {
       /*
        *
        *
-       *  POST PUBLISH DOCUMENT TO INBOX
+       * POST PUBLISH DOCUMENT TO INBOX
        *
        * Request
        *
@@ -431,26 +555,6 @@ server.get('/api/paintpost/:id', (req, res) => {
       // });
       // post_req.write(post_data);
       // post_req.end();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -476,72 +580,37 @@ server.get('/api/paintpost/:id', (req, res) => {
 
 
 /**
- * 
- * COMPILE POST FROM TEMPLATE
- * 
- * Takes the post as json object and converts into a valid html document
+ * * COMPILE POST FROM TEMPLATE
+ * * Takes the post as json object and converts into a valid html document
  * It loads the post template file
  * establishes publish year and publish month 
  * converts the markdown to html
  * compiles the markup fragment into the html doc
  * returns the doc
- * 
- * Note this is async so needs to run as a promise.
+ * * Note this is async so needs to run as a promise.
  * This isn't ideal as it forces us to contort the calling logic and embed within this 
  * function execution scope.  not ideal but not the end of th world for now
- * 
- * @param {object} post - raw json version of post including metadata
+ * * @param {object} post - raw json version of post including metadata
  * @returns {string} - fully compiled/valie html document
  */
 const getCompiledPost = async (post) => {
   const templateData = fs.readFileSync('./server/templates/postTemplate.html', 'utf8');
   var pubDate = new Date(post.publishDate);
-  console.log(`| getCompiledPost pubDate ${pubDate}`);
 
-  post.publishYear = post.publishDate.getFullYear();
-  console.log(`| getCompiledPost post.publishYear ${post.publishYear}`);
-  post.publishMonth = (post.publishDate.getMonth() + 1);
-  console.log(`| getCompiledPost post.publishMonth ${post.publishMonth}`);
-
+  const publishDate = new Date(post.publishDate);
+  post.publishYear = publishDate.getFullYear();
+  post.publishMonth = (publishDate.getMonth() + 1);
   post.markup = converter.makeHtml(post.body);
-  console.log(`| getCompiledPost post.markup ${post.markup}`);
 
   var compiled = _.template(templateData);
 
   const publishDoc = compiled(post);
- //  console.log(`| getCompiledPost publishDoc ${publishDoc}`);
-
   return publishDoc;
-/*  return fs.readFile('./server/templates/postTemplate.html', 'utf8', function (err, tpl) {
-    if (err) {
-      return console.log(` getCompiledPost Error loading post template source file: ${err}`);
-    }
-    var pubDate = new Date(post.publishDate);
-    console.log(`| getCompiledPost pubDate ${pubDate}`);
 
-    post.publishYear = post.publishDate.getFullYear();
-    console.log(`| getCompiledPost post.publishYear ${post.publishYear}`);
-    post.publishMonth = (post.publishDate.getMonth() + 1);
-    console.log(`| getCompiledPost post.publishMonth ${post.publishMonth}`);
-
-    post.markup = converter.makeHtml(post.body);
-    console.log(`| getCompiledPost post.markup ${post.markup}`);
-
-    var compiled = _.template(tpl);
-
-    const publishDoc = compiled(post);
-   //  console.log(`| getCompiledPost publishDoc ${publishDoc}`);
-
-    return publishDoc;
-  });
-  */
 };
 
 const postTheDamnDocument = async (post_data, arg2, arg3) => {
-  console.log(`| postTheDamnDocument A`);
-//  const urlPath = 'http://localhost:8888/api/inbox';
   const urlPath = 'http://localhost/fourfivesix/inbox/inbox.php';
-  console.log(`| postTheDamnDocument B`);
   const response = await fetch(urlPath, {
     method: 'POST', 
     body: JSON.stringify(post_data),
@@ -567,6 +636,30 @@ const postTheDamnDocument = async (post_data, arg2, arg3) => {
   }
 };
 
+
+const postToStaging = async (post_data, arg2, arg3) => {
+  const urlPath = 'http://localhost:9999/api/inbox';
+  const response = await fetch(urlPath, {
+    method: 'POST', 
+    body: post_data,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': post_data.length
+    }
+  });
+  const data = await response.text();
+  console.log(`| postToStaging D`);
+
+  // TODO surface status of repaint effort to signal the frontend of success / failure
+  if (response.ok) {
+    console.log(' postToStagingResponse: It worked!!!');
+    console.log('| postToStaging RESPONSE FROM PHP text() ', data);
+      
+  } else {
+    console.log('postToStaging Response: It DID NOT WORK ', response.status);
+    console.log('postToStaging Response: It DID NOT WORK data ', data);
+  }
+};
 /**
 
   POST POST
@@ -584,11 +677,6 @@ const postPost = async (targetConfig, post, cb) => {
   // COMPILE THE POST
   const publishDoc = await getCompiledPost(post)
     .then((publishDoc) => {
-      // console.log('|  promise after compile publishDoc', publishDoc);
-
-
-
-
       // var post_data = querystring.stringify({
       //   'ApiKey': targetConfig.apiKey,
       //   'PostPublishYear': post.publishYear,
@@ -618,17 +706,78 @@ const postPost = async (targetConfig, post, cb) => {
 
 
 }
+
+/**
+ * * GENERATE STAGING SITE
+ * * */
+server.get('/api/generatestaging', async (req, res) => {
+  const publishedPosts = getPublishedPosts();
+  const author = 'Sean Brookes';
+  const targetConfig = { // Define targetConfig here for use with postToStaging and generateHomePage
+    host: 'localhost',
+    port: '9999',
+    path: '/api/inbox',
+    isLoggingOn: 'true',
+    apiKey: '__DEV_KEY__'
+  };
+  
+  const postPromises = [];
+
+  if (publishedPosts.length > 0) {
+    for (let i = 0; i < publishedPosts.length; i++) {
+      // create the page and post to staging
+      const publishedPostItem = publishedPosts[i];
+      if (!publishedPostItem?.author) {
+        publishedPostItem.author = author;
+      }
+
+      // Chain the promises to process and send individual posts
+      const processedPostPromise = getCompiledPost(publishedPostItem)
+        .then((postBody) => {
+          const rawPostData = {
+            ApiKey: targetConfig.apiKey,
+            PostPublishYear: publishedPostItem.publishYear,
+            PostPublishMonth: publishedPostItem.publishMonth,
+            IsLogging: targetConfig.isLoggingOn,
+            PostSlug: publishedPostItem.slug,
+            PostBody: postBody
+          };
+          
+          var post_data = querystring.stringify(rawPostData);    
+          return postToStaging(post_data);
+        })
+        .catch((error) => {
+          console.log('| processing staging post error ', error);
+        });
+      
+      postPromises.push(processedPostPromise);
+    }
+  }
+
+  // 1. Wait for all individual posts to finish staging
+  await Promise.all(postPromises);
+  
+  // 2. Generate and post the index.html file
+  await generateHomePage(targetConfig);
+
+  // Respond after everything is done
+  res.status(200).send({message: 'Staging generation complete.'});
+});
+
+
 server.post('/api/publish', (req, res) => {
   const post = req.body;
   const author = 'Sean Brookes';
   if (!post || !post.body) {
     res.sendStatus(500);
     res.send({message: 'not saved missing post body'});
+    return;
   }
 
   if (!post.id) {
     res.sendStatus(500);
     res.send({message: 'not published missing post id'});
+    return;
   }
   if (!post.slug) {
     post.slug = getSlug(post.title);
@@ -653,251 +802,44 @@ server.post('/api/publish', (req, res) => {
 
   var targetConfig = {
     host: 'localhost',
-    port: '8888',
+    port: '9999', // Updated to 9999 to match inbox.js config
     path: '/api/inbox',
     isLoggingOn: 'true',
-    apiKey: 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO'
+    apiKey: '__DEV_KEY__' // Changed to __DEV_KEY__ to match inbox.js EXPECTED_API_KEY
   };
-  postPost(targetConfig, post, (err, doc) => {
-    console.log('|  publish callback ', post.title);
-    // save this post
-    /*
-    write the file
-    */
-    fs.writeFile(`./server/posts/${post.id}.json`, JSON.stringify(post), err => { 
-          
-      // Checking for errors 
-      if (err) throw err;  
-
-      //  console.log("Done writing"); // Success 
-      res.send({status: 200, message: 'published'});
+  
+  // Use a promise-based approach to control the flow
+  const publishProcess = postPost(targetConfig, post)
+    .then(() => {
+      // 1. Post to inbox successful, now save post locally
+      return new Promise((resolve, reject) => {
+        fs.writeFile(`./server/posts/${post.id}.json`, JSON.stringify(post), err => { 
+          if (err) {
+            console.error('| Error saving post locally after publish:', err);
+            return reject(err);
+          }
+          console.log('| Post saved locally.');
+          resolve();
+        });
+      });
+    })
+    .then(() => {
+      // 2. Local save successful, now generate and post home page
+      return generateHomePage(targetConfig);
+    })
+    .then(() => {
+      // 3. All steps complete, send success response
+      res.status(200).send({status: 200, message: 'published'});
+    })
+    .catch((error) => {
+      console.error('| Publish flow failed:', error);
+      res.status(500).send({message: 'Publish flow failed.', details: error.message});
     });
-  });
-
-
-
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-
-  Older custom methods
-
-  not in main use
-
-
-*/
-
-server.get('/api/doit', (req, res) => {
-  console.log('made it this far');
-  const dir = './server/posts/';
-
-  let alreadyExistingFiles = [];
-  console.log('A');
-  // list all files in the directory
-  try {
-      const files = fs.readdirSync(dir);
-      console.log('B');
-      // files object contains all files names
-      files.forEach(file => {
-        // console.log('reading file', file);
-        try {
-          const data = fs.readFileSync('./server/posts/' + file);
-        //  console.log('original ', data);
-          const subjectPost = JSON.parse(data);
-        //  console.log('original ', subjectPost.lastUpdate);
-
-          const testData = new Date(subjectPost.lastUpdate);
-        //  console.log('testData', testData.getTime());
-          subjectPost.lastUpdate = testData.getTime();
-
-          //data.lastUpdate = new Date(subjectPost.lastUpdate).getTime();
-     //     console.log('file last update', subjectPost.lastUpdate);
-          alreadyExistingFiles.push(subjectPost);
-        } catch (err) {
-            console.error(err);
-        }
-
-      });
-
-  } catch (err) {
-      console.log(err);
-  }
-  console.log('C');
-  alreadyExistingFiles.map((freshPost) => {
-    // fs.writeFile(`./posts/${freshPost.id}.json`, JSON.stringify(freshPost), err => { 
-      
-    //   // Checking for errors 
-    //   if (err) throw err;  
-    
-    //   console.log("Done writing"); // Success 
-    //   // res.send({status: 200, message: 'saved'});
-    // });
-  
-  });
-      
-   // console.log('posts', posts);
-  res.send({message:'we are done'});
-});
-
-server.get('/api/convert-once', (req, res) => {
-
-  console.log('| This was used once to convert old markup fragments to markdown it is only here for reference');
-  
-  
-  // get list of all the posts
-  const dir = './server/posts/';
-  let files;
-  let returnError;
-  res.contentType('application/json');
-
-  try {
-    files = fs.readdirSync(dir);
-  
-  }
-  catch(error) {
-    returnError = error;
-  }
-
-  const postCollection = [];
-
-  if (files) {
-    try {
-      const turndownService = new TurndownService();
-
-
-      // files object contains all files names
-      files.forEach(file => {
-        // console.log('reading file', file);
-        // loop over them
-
-        // for each post
-
-        // check if it has html body
-
-        // if it has html it must be converted
-
-        // call markdow service on the body
-
-        // if all is good then resave the file
-
-        try {
-          const fileData = fs.readFileSync('./server/posts/' + file);
-          if (fileData) {
-            const parsedFileData = JSON.parse(fileData);
-            const postBody = parsedFileData.body;
-            const postTitle = parsedFileData.title;
-            if (postBody) {
-              if (postBody.startsWith('<')) {
-                console.log('|');
-               // console.log('|  NEW POST');
-                console.log('|');
-              //  console.log('|  before:  ', postBody);
-                console.log('|');
-    
-                // convert HTML to Markdown
-                const convertedBody = turndownService.turndown(postBody);
-    
-                console.log('|');
-                console.log('|  after:  ', convertedBody);
-                console.log('|');
-                parsedFileData.body = convertedBody;
-
-                // now resave the file
-                // fs.writeFile(`./server/posts/${parsedFileData.id}.json`, JSON.stringify(parsedFileData), err => { 
-      
-                //   // Checking for errors 
-                //   if (err) throw err;  
-                
-                // //  console.log("Done writing"); // Success 
-                //   console.log('|');
-                //   console.log('|  SAVED:  ');
-                //   console.log('|');
-                // });      
-              }
-              else {
-                console.log('|');
-                console.log('|  NOT THIS ONE');
-                console.log('|');
-                console.log('|    ', postTitle);
-                console.log('|');
-      
-              }
-    
-            }
-            else {
-              console.log('|');
-              console.log('|  ', postTitle);
-              console.log('|  Something no body on this file');
-              console.log('|');            
-            }
-          }
-          else {
-            console.log('|');
-            console.log('| no file data', file);
-            console.log('|');
-          }
-
-        } catch (err) {
-          console.error('|  list of posts', err);
-          returnError = err;
-        }
-      });
-    }
-    catch(error) {
-      console.log('| Error iterating over the files', error);
-      returnError = error;
-    }
-  }
-
-  if (returnError) {
-    res.status(500)
-    res.send({error: returnError.message});
-  }
-  else {
-    res.send('all good');
-  }
-
-
-
-
-
-});
 server.get('*', (req, res) => {
   res.send('nothing here');
 });
-
-
-
-
-
 
 server.listen(PORT, () => {
   console.log('Graffiti Engine 4 server is running on port', 4444);
