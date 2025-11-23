@@ -36,7 +36,7 @@ const searchTextInput = (event) => {
 const toggleRowCommandMenu = (event) => {
   const targetPostId = event.currentTarget.value;
   console.log('| POST test to command menu for ', targetPostId);
-  store.methods.paintPost(targetPostId);
+  // store.methods.paintPost(targetPostId);
   // server.get('/api/repaint/:id', (req, res) => {
 };
 

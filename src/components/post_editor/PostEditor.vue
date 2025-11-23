@@ -184,22 +184,6 @@ const openVectorEditor = () => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 let arc = ref(null);
 
 
@@ -262,7 +246,7 @@ d3.interval(function() {
   <div data-id="component-header">
     <h2>Editor</h2>
     <div class="flex">
-      <button @click="openVectorEditor"><img height="16" width="16" src="../../assets/draw.svg"/></button>
+      <a href="http://localhost:8888/" target="_blank" rel="noopener">Staging</a>
       <button @click="clearNew"><img height="16" width="16" src="../../assets/greyx.svg"/></button>
     </div>
   </div>
@@ -272,7 +256,7 @@ d3.interval(function() {
     <button value="preview" @click="toggleTabView">{{ componentState.previewToggleText }}</button>
   </div>
   <!-- marked preview -->
-  <div id="editor" ref="previewEl"></div> 
+  <div id="editor" ref="previewEl" data-id="editor-preview-container"></div> 
   <div data-id="editor_view_container">
     <div data-id="editor_title_input_container">
       <label>Title</label>
@@ -353,6 +337,9 @@ d3.interval(function() {
   justify-content: space-between;
   align-items: center;
   padding: 0 1rem;
+}
+[data-id="editor-preview-container"] {
+  padding: 1rem;
 }
 [data-id="editor_view_container"] {
   padding: 1rem;
