@@ -44,6 +44,8 @@ const toggleTabView = () => {
 let isAutoSave = ref(true);
 
 
+const metaService = inject('meta-service');
+const title = ref('Graffiti Engine');
 
 const previewEl = ref(null);
 const editorEl = ref(null);
@@ -110,6 +112,13 @@ onMounted(() => {
     autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
   }
 
+  metaService.setTitle(`[edit]: ${componentState.currentPostTitle}`);
+
+  console.log('|');
+  console.log('| onMounted editorState ', editorState);
+  console.log('|');
+
+
   document.addEventListener('visibilitychange', function(event) {
     if (document.hidden) {
       console.log('| GE4 tab is hidden - pausing autosave');
@@ -142,6 +151,9 @@ onUnmounted(() => {
 const currentPost = computed(() => {
   return store?.state?.currentPost?.body;
 });
+const currentTitle = computed(() => {
+  return store?.state?.currentPost?.title;
+});
 watch(isAutoSave, (value) => {
 
   if (!isAutoSave.value) {
@@ -156,6 +168,10 @@ watch(currentPost, (value) => {
   doTheSvg();
 });
 
+watch(currentTitle, (theTitle) => {
+  metaService.setTitle(`[edit]: ${theTitle}`);
+});
+
 
 const setSaveIndicator = (value) => {
   componentState.isSaving = value;
@@ -166,6 +182,10 @@ const savePost = () => {
     return;
   }
   if (sync_val) {
+    if (!componentState.currentPostTitle) {
+      console.warn('| Save called with no TITLE!!');
+      return;
+    }
     setSaveIndicator(true);
     store.methods.updateCurrentPostTitle(componentState.currentPostTitle);
     store.methods.updateCurrentPostBody(sync_val);

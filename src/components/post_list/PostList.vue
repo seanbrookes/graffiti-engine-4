@@ -90,7 +90,10 @@ const editPost = (event) => {
         <tr v-for="(post, index) in store.state.postList" :key="post.id" :class="[post.id === store.state?.currentPost?.id ? 'post-row-highlight' : '']">
           <td style="text-align: right; font-size: 9px; padding-right: .2rem">{{ index + 1 }})</td>
           <td>
+            <a :href="`/?mode=edit&post=${post.id}`">{{ post.title }}</a>
+            <!--
             <button @click="editPost" :value="post.id" data-id="post_list_title_button" :title="post.title">{{ post.title }}</button>
+            -->
           </td>
           <td>{{ post.status }}</td>
           <td>{{ new Date(post.lastUpdate).toLocaleDateString() }}</td>
