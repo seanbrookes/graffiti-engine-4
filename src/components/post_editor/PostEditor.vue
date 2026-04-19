@@ -9,6 +9,8 @@ import { mangle } from "marked-mangle";
 import { gfmHeadingId } from "marked-gfm-heading-id";
 import { clearNew } from '../../ge4-helpers';
 
+let autosaveTimer = null;
+
 const markedOptions = {
   prefix: 'gfe-',
 };
@@ -34,6 +36,17 @@ let editor = {};
 let currentHTML = '';
 let currentView = 'editor';
 const isAutoSaveRef = ref();
+
+
+const startAutosaveTimer = () => {
+  // Clear any existing timer first
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  
+  // Set a new timer
+  autosaveTimer = setTimeout(() => {
+    savePost();
+  }, DEFAULT_AUTOSAVE_MS);
+};
 
 // TODO this is sloppy
 const toggleTabView = () => {
@@ -77,7 +90,7 @@ const renderCodeMirror = () => {
    * 
    */
   const code_mirror_el = document.getElementById('code_mirror_editor_el');  
-  componentState.currentPostTitle = store?.state?.currentPost?.title;
+  // componentState.currentPostTitle = store?.state?.currentPost?.title;
   const editorValue = editor.state.doc.toString();
   editor.dispatch({
     changes: {
@@ -87,6 +100,12 @@ const renderCodeMirror = () => {
     },
   });
 };
+
+
+
+
+
+
 let sync_val = null;
 const initialEditorState = {
   doc: store?.state?.currentPost?.body,
@@ -99,6 +118,10 @@ const initialEditorState = {
 };
 const editorState = EditorState.create(initialEditorState);
 
+
+
+
+
 onMounted(() => {
   autoSaveTimerDelay = DEFAULT_AUTOSAVE_MS;
 
@@ -108,11 +131,12 @@ onMounted(() => {
     parent: editorEl.value
   });
   // start autosave
-  if (isAutoSave && (typeof autosaveTimerRef !== 'number')) {
-    autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
+// Initial timer start
+  if (isAutoSave.value) {
+    startAutosaveTimer();
   }
 
-  metaService.setTitle(`[edit]: ${componentState.currentPostTitle}`);
+  metaService.setTitle(`[edit]: ${currentTitle}`);
 
   console.log('|');
   console.log('| onMounted editorState ', editorState);
@@ -135,38 +159,78 @@ onMounted(() => {
   document.querySelector('[data-id="editor_input_container"]').style.resize = 'vertical';
 });
 
+
+
+
+
 const typingStatus = () => {
-  // set type status to active
   componentState.isActivelyEditing = true;
-  // reset timer to turn typing status active to false
-  setTimeout(() => {
-    componentState.isActivelyEditing = false;
-  }, 6000);
+  
+  // 1. Reset the "Is Editing" flag after a pause
+  // (Optional: use a separate timeout for this if you use it for UI indicators)
+  
+  // 2. IMPORTANT: Reset the autosave clock on every keypress
+  startAutosaveTimer();
 };
+
 
 onUnmounted(() => {
   document.removeEventListener('keypress', typingStatus);   
 });
 
+
+
 const currentPost = computed(() => {
   return store?.state?.currentPost?.body;
 });
-const currentTitle = computed(() => {
-  return store?.state?.currentPost?.title;
-});
-watch(isAutoSave, (value) => {
 
-  if (!isAutoSave.value) {
-    clearTimeout(autosaveTimerRef);
-  }
-  else {
-    autosaveTimerRef = setInterval(savePost, autoSaveTimerDelay);
+
+
+
+const currentTitle = computed({
+  get() {
+    return store?.state?.currentPost?.title || '';
+  },
+  set(newValue) {
+    // This pushes the change to the store immediately as the user types
+    store.methods.updateCurrentPostTitle(newValue);
+    // Optional: Trigger your autosave timer reset here too
+    startAutosaveTimer();
   }
 });
-watch(currentPost, (value) => {
-  renderCodeMirror();
+
+
+
+
+watch(isAutoSave, (enabled) => {
+  if (enabled) {
+    startAutosaveTimer();
+  } else {
+    clearTimeout(autosaveTimer);
+  }
+});
+
+
+
+
+watch(currentPost, (newValue) => {
+  // Only update CodeMirror if the data in the store is different from the editor
+  // This prevents the "Save -> Store Update -> Watcher Fires -> Editor Resets" loop
+  const editorValue = editor.state.doc.toString();
+  if (newValue !== editorValue) {
+    editor.dispatch({
+      changes: {
+        from: 0,
+        to: editorValue.length,
+        insert: newValue || "",
+      },
+    });
+  }
   doTheSvg();
 });
+
+
+
 
 watch(currentTitle, (theTitle) => {
   metaService.setTitle(`[edit]: ${theTitle}`);
@@ -178,22 +242,30 @@ const setSaveIndicator = (value) => {
 };
 
 const savePost = () => {
-  if (componentState.isActivelyEditing) {
+  // Use .value because it's a computed ref in <script setup>
+  const titleToSave = currentTitle.value; 
+
+  if (!titleToSave) {
+    console.warn('| Save aborted: No title present.');
     return;
   }
+
   if (sync_val) {
-    if (!componentState.currentPostTitle) {
-      console.warn('| Save called with no TITLE!!');
-      return;
-    }
     setSaveIndicator(true);
-    store.methods.updateCurrentPostTitle(componentState.currentPostTitle);
+    
+    // The title is likely already updated in the store via the 'set' 
+    // in our writable computed, but calling this ensures consistency.
+    store.methods.updateCurrentPostTitle(titleToSave);
     store.methods.updateCurrentPostBody(sync_val);
     store.methods.saveCurrentPost();
 
+    if (isAutoSave.value) {
+      startAutosaveTimer();
+    }
+
     setTimeout(() => {
       setSaveIndicator(false);
-    }, 3000)
+    }, 3000);
   }
 };
 
@@ -280,7 +352,7 @@ d3.interval(function() {
   <div data-id="editor_view_container">
     <div data-id="editor_title_input_container">
       <label>Title</label>
-      <input v-model="componentState.currentPostTitle" type="text" data-id="post_title_text_input" ref="postTitleInputEl" />
+      <input v-model="currentTitle" type="text" data-id="post_title_text_input" ref="postTitleInputEl" />
     </div>
     <div data-id="editor_input_container">
       <!-- codemirror edting -->

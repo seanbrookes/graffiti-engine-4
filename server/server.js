@@ -21,125 +21,7 @@ So, bodyParser.json() and bodyParser.urlencoded() are built into Express as expr
 */
 server.use(cors());
 const converter = new showdown.Converter();
-// import config from './config.js';
-/**
- * This is the main backend file for GE
- * I handles fetching, saving, editing, publishing, painting, etc for the local post data
- */
 
-
-// function toJSON(node) {
-//   let propFix = { for: 'htmlFor', class: 'className' };
-//   let specialGetters = {
-//     style: (node) => node.style.cssText,
-//   };
-//   let attrDefaultValues = { style: '' };
-//   let obj = {
-//     nodeType: node.nodeType,
-//   };
-//   if (node.tagName) {
-//     obj.tagName = node.tagName.toLowerCase();
-//   } else if (node.nodeName) {
-//     obj.nodeName = node.nodeName;
-//   }
-//   if (node.nodeValue) {
-//     obj.nodeValue = node.nodeValue;
-//   }
-//   let attrs = node.attributes;
-//   if (attrs) {
-//     let defaultValues = new Map();
-//     for (let i = 0; i < attrs.length; i++) {
-//       let name = attrs[i].nodeName;
-//       defaultValues.set(name, attrDefaultValues[name]);
-//     }
-//     // Add some special cases that might not be included by enumerating
-//     // attributes above. Note: this list is probably not exhaustive.
-//     switch (obj.tagName) {
-//       case 'input': {
-//         if (node.type === 'checkbox' || node.type === 'radio') {
-//           defaultValues.set('checked', false);
-//         } else if (node.type !== 'file') {
-//           // Don't store the value for a file input.
-//           defaultValues.set('value', '');
-//         }
-//         break;
-//       }
-//       case 'option': {
-//         defaultValues.set('selected', false);
-//         break;
-//       }
-//       case 'textarea': {
-//         defaultValues.set('value', '');
-//         break;
-//       }
-//     }
-//     let arr = [];
-//     for (let [name, defaultValue] of defaultValues) {
-//       let propName = propFix[name] || name;
-//       let specialGetter = specialGetters[propName];
-//       let value = specialGetter ? specialGetter(node) : node[propName];
-//       if (value !== defaultValue) {
-//         arr.push([name, value]);
-//       }
-//     }
-//     if (arr.length) {
-//       obj.attributes = arr;
-//     }
-//   }
-//   let childNodes = node.childNodes;
-//   // Don't process children for a textarea since we used `value` above.
-//   if (obj.tagName !== 'textarea' && childNodes && childNodes.length) {
-//     let arr = (obj.childNodes = []);
-//     for (let i = 0; i < childNodes.length; i++) {
-//       arr[i] = toJSON(childNodes[i]);
-//     }
-//   }
-//   return obj;
-// }
-
-// function toDOM(input) {
-//   let obj = typeof input === 'string' ? JSON.parse(input) : input;
-//   let propFix = { for: 'htmlFor', class: 'className' };
-//   let node;
-//   let nodeType = obj.nodeType;
-//   switch (nodeType) {
-//     // ELEMENT_NODE
-//     case 1: {
-//       node = document.createElement(obj.tagName);
-//       if (obj.attributes) {
-//         for (let [attrName, value] of obj.attributes) {
-//           let propName = propFix[attrName] || attrName;
-//           // Note: this will throw if setting the value of an input[type=file]
-//           node[propName] = value;
-//         }
-//       }
-//       break;
-//     }
-//     // TEXT_NODE
-//     case 3: {
-//       return document.createTextNode(obj.nodeValue);
-//     }
-//     // COMMENT_NODE
-//     case 8: {
-//       return document.createComment(obj.nodeValue);
-//     }
-//     // DOCUMENT_FRAGMENT_NODE
-//     case 11: {
-//       node = document.createDocumentFragment();
-//       break;
-//     }
-//     default: {
-//       // Default to an empty fragment node.
-//       return document.createDocumentFragment();
-//     }
-//   }
-//   if (obj.childNodes && obj.childNodes.length) {
-//     for (let childNode of obj.childNodes) {
-//       node.appendChild(toDOM(childNode));
-//     }
-//   }
-//   return node;
-// }
 
 const getSlug = (title) => {
   // replace spaces with dashes
@@ -215,7 +97,12 @@ const getPostLink = (post) => {
 const getCompiledIndex = async (posts) => {
   // NOTE: indexTemplate.html is required in the ./server/templates folder.
   // Changed to use the user-provided homeTemplate.html
-  const templateData = fs.readFileSync('./server/templates/homeTemplate.html', 'utf8');
+  let templateData;
+  try {
+    templateData = fs.readFileSync('./server/templates/homeTemplate.html', 'utf8');
+  } catch (e) {
+    throw new Error('homeTemplate.html not found in ./server/templates/');
+  }
   let listMarkup = '<ul class="Blog__HomePostList">';
 
   // Logic based on the original system: first 3 posts full content, the rest are links
@@ -390,8 +277,7 @@ server.post('/api/posts', (req, res) => {
   console.log('| SAVE POST req ', req.body);
   const saveTimestamp = new Date().getTime();
   if (!targetPost || !targetPost.body) {
-    res.status = 500
-    res.send({message: 'not saved missing post body'});
+    return res.status(500).send({message: 'not saved missing post body'});
   }
   console.log('| SAVE POST ', targetPost.body);
   let freshPost = targetPost;
@@ -474,7 +360,7 @@ server.get('/api/paintpost/:id', (req, res) => {
 
 
       var post_data = querystring.stringify({
-        'ApiKey': 'luhlkj',
+        'ApiKey': '__DEV_KEY__',
         'IsLogging': 'true',
         'PostSlug': post.slug,
         'PostBody': post.body
@@ -520,52 +406,7 @@ server.get('/api/paintpost/:id', (req, res) => {
     };
     postPost(targetConfig, post, (err, doc) => {
       console.log('|  publish callback ', post.title);
-      // save this post
-      /*
-      write the file
-      */
-      // fs.writeFile(`./server/posts/${post.id}.json`, JSON.stringify(post), err => { 
-            
-      //   // Checking for errors 
-      //   if (err) throw err;  
-  
-      //   //  console.log("Done writing"); // Success 
-      //   res.send({status: 200, message: 'published'});
-      // });
     });
-      // Set up the request
-      /*
-       *
-       *
-       * POST PUBLISH DOCUMENT TO INBOX
-       *
-       * Request
-       *
-       *
-       * */
-  
-      // console.log('| here |  the doc to post: ' + publishDoc);
-      // var post_req = http.request(post_options, function (res) {
-      //   res.setEncoding('utf8');
-      //   res.on('data', function (chunk) {
-      //     //console.log('| ');
-      //     console.log('PAINT Response: It worked!!!');
-      //     //console.log('| ');
-      //   });
-      // });
-      // post_req.write(post_data);
-      // post_req.end();
-
-
-
-      /*
-      write the file
-      */
-      // fs.writeFile(`./server/posts/${freshPost.id}.json`, JSON.stringify(freshPost), err => {          
-      //   // Checking for errors 
-      //   if (err) throw err;  
-      //   res.send({status: 200, message: 'saved'});
-      // });
 
     });
   }
@@ -594,7 +435,12 @@ server.get('/api/paintpost/:id', (req, res) => {
  * @returns {string} - fully compiled/valie html document
  */
 const getCompiledPost = async (post) => {
-  const templateData = fs.readFileSync('./server/templates/postTemplate.html', 'utf8');
+  let templateData;
+  try {
+    templateData = fs.readFileSync('./server/templates/postTemplate.html', 'utf8');
+  } catch (e) {
+    throw new Error('postTemplate.html not found in ./server/templates/');
+  }
   var pubDate = new Date(post.publishDate);
 
   const publishDate = new Date(post.publishDate);
@@ -638,7 +484,9 @@ const postTheDamnDocument = async (post_data, arg2, arg3) => {
 
 
 const postToStaging = async (post_data, arg2, arg3) => {
+  console.log('| postToStaging 1');
   const urlPath = 'http://localhost:9999/api/inbox';
+  console.log('| postToStaging 2');
   const response = await fetch(urlPath, {
     method: 'POST', 
     body: post_data,
@@ -648,14 +496,16 @@ const postToStaging = async (post_data, arg2, arg3) => {
     }
   });
   const data = await response.text();
-  console.log(`| postToStaging D`);
+  console.log('| postToStaging 3 D');
 
   // TODO surface status of repaint effort to signal the frontend of success / failure
   if (response.ok) {
+  console.log('| postToStaging 4');
     console.log(' postToStagingResponse: It worked!!!');
     console.log('| postToStaging RESPONSE FROM PHP text() ', data);
       
   } else {
+  console.log('| postToStaging 5');
     console.log('postToStaging Response: It DID NOT WORK ', response.status);
     console.log('postToStaging Response: It DID NOT WORK data ', data);
   }
@@ -677,21 +527,7 @@ const postPost = async (targetConfig, post, cb) => {
   // COMPILE THE POST
   const publishDoc = await getCompiledPost(post)
     .then((publishDoc) => {
-      // var post_data = querystring.stringify({
-      //   'ApiKey': targetConfig.apiKey,
-      //   'PostPublishYear': post.publishYear,
-      //   'PostPublishMonth': post.publishMonth,
-      //   'PostSlug': post.slug,
-      //   'PostBody': publishDoc
-      // });
-    
-      // var post_data = {
-      //   ApiKey: targetConfig.apiKey,
-      //   PostPublishYear: post.publishYear,
-      //   PostPublishMonth: post.publishMonth,
-      //   PostSlug: post.slug,
-      //   PostBody: publishDoc
-      // };    
+  
       var post_data = querystring.stringify({
         ApiKey: targetConfig.apiKey,
         PostPublishYear: post.publishYear,
@@ -703,8 +539,6 @@ const postPost = async (targetConfig, post, cb) => {
       return postTheDamnDocument(post_data);
 
     });
-
-
 }
 
 /**
@@ -720,20 +554,24 @@ server.get('/api/generatestaging', async (req, res) => {
     isLoggingOn: 'true',
     apiKey: '__DEV_KEY__'
   };
-  
+  console.log('| GENERATE STAGING A');
   const postPromises = [];
 
   if (publishedPosts.length > 0) {
+  console.log('| GENERATE STAGING B published posts');
     for (let i = 0; i < publishedPosts.length; i++) {
+  console.log('| GENERATE STAGING C');
       // create the page and post to staging
       const publishedPostItem = publishedPosts[i];
       if (!publishedPostItem?.author) {
         publishedPostItem.author = author;
       }
+  console.log('| GENERATE STAGING D');
 
       // Chain the promises to process and send individual posts
       const processedPostPromise = getCompiledPost(publishedPostItem)
         .then((postBody) => {
+  console.log('| GENERATE STAGING E');
           const rawPostData = {
             ApiKey: targetConfig.apiKey,
             PostPublishYear: publishedPostItem.publishYear,
@@ -747,18 +585,22 @@ server.get('/api/generatestaging', async (req, res) => {
           return postToStaging(post_data);
         })
         .catch((error) => {
+  console.log('| GENERATE STAGING F');
           console.log('| processing staging post error ', error);
         });
       
+  console.log('| GENERATE STAGING G');
       postPromises.push(processedPostPromise);
     }
   }
 
   // 1. Wait for all individual posts to finish staging
   await Promise.all(postPromises);
+  console.log('| GENERATE STAGING C');
   
   // 2. Generate and post the index.html file
   await generateHomePage(targetConfig);
+  console.log('| GENERATE STAGING C');
 
   // Respond after everything is done
   res.status(200).send({message: 'Staging generation complete.'});
@@ -842,5 +684,5 @@ server.get('*', (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log('Graffiti Engine 4 server is running on port', 4444);
+  console.log('Graffiti Engine 4 server is running on port', PORT);
 });

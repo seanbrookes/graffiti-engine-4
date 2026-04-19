@@ -1,5 +1,5 @@
 <script setup>
-import { ref, inject, reactive, watch } from 'vue';
+import { ref, inject, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
 import { LengthViz } from './';
 import { clearNew } from '../../ge4-helpers';
 
@@ -9,12 +9,50 @@ store.methods.fetchPosts();
 
 const postListRef = ref([]);
 
+const POST_ACTIONS = {
+  PUBLISH: 'publish',
+  STAGE: 'stage',
+  DELETE: 'delete',
+};
+
 const state = reactive({
   currentSortDir: 'asc',
   currentSortCol: 'title',
   maxCharLength: 0,
   searchText: '',
 });
+
+
+
+// 1. Reactive state for the menu
+const openPostId = ref(null) 
+
+// 2. Template ref to identify the menu element
+const menuContainer = ref(null)
+
+const toggleMenu = (postId) => {
+  openPostId.value = openPostId.value === postId ? null : postId
+}
+
+// 3. Your custom methods
+const handleAction = (actionName, postId) => {
+  console.log(`Executing ${actionName} for post:`, postId)
+  openPostId.value = null // Close the menu
+}
+
+// 4. Close on click outside logic
+const closeOnOutsideClick = (event) => {
+  if (menuContainer.value && !menuContainer.value.contains(event.target)) {
+    openPostId.value = null
+  }
+}
+
+onMounted(() => window.addEventListener('click', closeOnOutsideClick))
+onUnmounted(() => window.removeEventListener('click', closeOnOutsideClick))
+
+
+
+
 
 
 const toggleSort = (event) => {
@@ -45,7 +83,23 @@ const editPost = (event) => {
   if (postId) {
     document.location.href = `/?mode=edit&post=${postId}`;
   }
-}
+};
+
+const postList = computed(() => {
+  return store.state.postList;
+})
+
+watch(postList, (postList) => {
+  console.log('post list length ', postList.length);
+  playWithPosts(postList);
+});
+
+const playWithPosts = (list) => {
+  console.log('| list of posts', list);
+  for (let i = 0; i < list.length; i++) {
+    console.log('| post ', list[i]);
+  }
+};
 
 </script>
 
@@ -99,9 +153,25 @@ const editPost = (event) => {
           <td>{{ new Date(post.lastUpdate).toLocaleDateString() }}</td>
           <td style="padding: 0; margin: 0"><LengthViz :post="post" :max="store.state.maxCharCount" /></td>
           <td>
+            <div class="kebab-menu-container">
+              <!-- The Trigger Button -->
+              <button  @click="toggleMenu(post.id)" class="kebab-trigger" aria-haspopup="true" id="kebab-trigger" aria-expanded="false">
+                <!-- Place your SVG asset here -->
+                <img class="icon" src="../../assets/Menu-Circles.svg" />
+              </button>
+
+              <!-- The Dropdown List -->
+              <div v-if="openPostId === post.id" class="dropdown-menu menu-list" id="kebab-list">
+                <button data-action="edit" @click="handleAction(POST_ACTIONS.PUBLISH, post.id)">Publish</button>
+                <button data-action="share" @click="handleAction(POST_ACTIONS.STAGE, post.id)">Stage</button>
+                <button data-action="delete" @click="handleAction(POST_ACTIONS.DELETE, post.id)">Delete</button>
+              </div>
+            </div>
+            <!--
             <button :value="post.id" @click="toggleRowCommandMenu">
               <img class="icon" src="../../assets/Menu-Circles.svg" />
             </button>
+            -->
           </td>
         </tr>
       </tbody>
@@ -184,4 +254,24 @@ tr.post-row-highlight {
   border: 1px solid #cccccc;
   border-radius: .3rem; 
 }
+/*
+  kebab menu
+*/
+.kebab-menu-container { position: relative; display: inline-block; }
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: white;
+  border: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.menu-list button {
+  text-align: left;
+  padding: .6rem;
+}
+.hidden { display: none; }
+/** end kebab menu */
 </style>
