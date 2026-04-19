@@ -43,21 +43,19 @@ const getPublishedPosts = () => {
   let files;
   let returnError;
   console.log('| 1');
- 
+
   try {
     files = fs.readdirSync(dir);
   }
   catch(error) {
     returnError = error;
   }
- 
+
   const postCollection = [];
- 
+
   if (files) {
     try {
-      // files object contains all files names
       files.forEach(file => {
-        // console.log('reading file', file);
         try {
           const data = fs.readFileSync('./server/posts/' + file);
           const parsedPostData = JSON.parse(data);
@@ -76,6 +74,26 @@ const getPublishedPosts = () => {
     }
   }
   return postCollection;
+};
+
+const getStagedPost = () => {
+  const dir = './server/posts/';
+  let files;
+  try {
+    files = fs.readdirSync(dir);
+  } catch (error) {
+    return null;
+  }
+  for (const file of files) {
+    try {
+      const data = fs.readFileSync('./server/posts/' + file);
+      const post = JSON.parse(data);
+      if (post?.status === 'staged') return post;
+    } catch (err) {
+      // skip unreadable files
+    }
+  }
+  return null;
 };
 
 // New helper to calculate the link path
@@ -152,21 +170,23 @@ const getCompiledIndex = async (posts) => {
  * Orchestrates the full process of generating the index.html and sending it to the inbox.
  * @param {Object} targetConfig - The configuration object for the target host/port/key/logging.
  */
-const generateHomePage = async (targetConfig) => {
+const generateHomePage = async (targetConfig, stagedPost = null) => {
   try {
     const publishedPosts = getPublishedPosts();
     console.log(`| generateHomePage: Found ${publishedPosts.length} published posts.`);
-    
-    if (publishedPosts.length === 0) {
+
+    const allPosts = stagedPost ? [...publishedPosts, stagedPost] : publishedPosts;
+
+    if (allPosts.length === 0) {
         console.log('| generateHomePage: No posts to generate index from. Skipping.');
         return;
     }
 
     // 1. Sort posts by publishDate descending (newest first)
-    publishedPosts.sort((a, b) => new Date(b.publishDate) - new Date(a.publishDate));
-    
+    allPosts.sort((a, b) => new Date(b.publishDate) - new Date(a.publishDate));
+
     // 2. Compile the Index Document
-    const indexDoc = await getCompiledIndex(publishedPosts);
+    const indexDoc = await getCompiledIndex(allPosts);
     
     // 3. Prepare POST data for inbox.js
     const rawPostData = {
@@ -546,64 +566,88 @@ const postPost = async (targetConfig, post, cb) => {
  * * */
 server.get('/api/generatestaging', async (req, res) => {
   const publishedPosts = getPublishedPosts();
+  const stagedPost = getStagedPost();
   const author = 'Sean Brookes';
-  const targetConfig = { // Define targetConfig here for use with postToStaging and generateHomePage
+  const targetConfig = {
     host: 'localhost',
     port: '9999',
     path: '/api/inbox',
     isLoggingOn: 'true',
     apiKey: '__DEV_KEY__'
   };
-  console.log('| GENERATE STAGING A');
+
+  const postsToStage = stagedPost ? [...publishedPosts, stagedPost] : publishedPosts;
   const postPromises = [];
 
-  if (publishedPosts.length > 0) {
-  console.log('| GENERATE STAGING B published posts');
-    for (let i = 0; i < publishedPosts.length; i++) {
-  console.log('| GENERATE STAGING C');
-      // create the page and post to staging
-      const publishedPostItem = publishedPosts[i];
-      if (!publishedPostItem?.author) {
-        publishedPostItem.author = author;
-      }
-  console.log('| GENERATE STAGING D');
-
-      // Chain the promises to process and send individual posts
-      const processedPostPromise = getCompiledPost(publishedPostItem)
-        .then((postBody) => {
-  console.log('| GENERATE STAGING E');
-          const rawPostData = {
-            ApiKey: targetConfig.apiKey,
-            PostPublishYear: publishedPostItem.publishYear,
-            PostPublishMonth: publishedPostItem.publishMonth,
-            IsLogging: targetConfig.isLoggingOn,
-            PostSlug: publishedPostItem.slug,
-            PostBody: postBody
-          };
-          
-          var post_data = querystring.stringify(rawPostData);    
-          return postToStaging(post_data);
-        })
-        .catch((error) => {
-  console.log('| GENERATE STAGING F');
-          console.log('| processing staging post error ', error);
-        });
-      
-  console.log('| GENERATE STAGING G');
-      postPromises.push(processedPostPromise);
-    }
+  for (const postItem of postsToStage) {
+    if (!postItem.author) postItem.author = author;
+    const processedPostPromise = getCompiledPost(postItem)
+      .then((postBody) => {
+        const rawPostData = {
+          ApiKey: targetConfig.apiKey,
+          PostPublishYear: postItem.publishYear,
+          PostPublishMonth: postItem.publishMonth,
+          IsLogging: targetConfig.isLoggingOn,
+          PostSlug: postItem.slug,
+          PostBody: postBody
+        };
+        return postToStaging(querystring.stringify(rawPostData));
+      })
+      .catch((error) => {
+        console.log('| processing staging post error ', error);
+      });
+    postPromises.push(processedPostPromise);
   }
 
-  // 1. Wait for all individual posts to finish staging
   await Promise.all(postPromises);
-  console.log('| GENERATE STAGING C');
-  
-  // 2. Generate and post the index.html file
-  await generateHomePage(targetConfig);
-  console.log('| GENERATE STAGING C');
+  await generateHomePage(targetConfig, stagedPost);
 
-  // Respond after everything is done
   res.status(200).send({message: 'Staging generation complete.'});
+});
+
+
+server.get('/api/stage/:id', async (req, res) => {
+  const postId = req.params.id;
+  let post;
+  try {
+    const data = fs.readFileSync(`./server/posts/${postId}.json`);
+    post = JSON.parse(data);
+  } catch (e) {
+    return res.status(404).send({ message: 'Post not found' });
+  }
+
+  const existingStaged = getStagedPost();
+  if (existingStaged && existingStaged.id !== postId) {
+    return res.status(409).send({ message: 'A post is already staged', stagedPost: existingStaged });
+  }
+
+  const saveTimestamp = new Date().getTime();
+  if (!post.publishDate) post.publishDate = new Date().toISOString();
+  if (!post.publishYear) post.publishYear = new Date(post.publishDate).getFullYear();
+  if (!post.publishMonth) post.publishMonth = new Date(post.publishDate).getMonth() + 1;
+  if (!post.slug) post.slug = getSlug(post.title);
+
+  post.status = 'staged';
+  post.lastUpdate = saveTimestamp;
+
+  fs.writeFileSync(`./server/posts/${postId}.json`, JSON.stringify(post));
+
+  try {
+    const postBody = await getCompiledPost(post);
+    const post_data = querystring.stringify({
+      ApiKey: '__DEV_KEY__',
+      PostPublishYear: post.publishYear,
+      PostPublishMonth: post.publishMonth,
+      IsLogging: 'true',
+      PostSlug: post.slug,
+      PostBody: postBody
+    });
+    await postToStaging(post_data);
+  } catch (e) {
+    console.error('| /api/stage compile/send error', e);
+  }
+
+  res.status(200).send({ message: 'Post staged', post });
 });
 
 
