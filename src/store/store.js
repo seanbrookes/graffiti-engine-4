@@ -11,6 +11,7 @@ const state = reactive({
   currentPostTitleHasChanged: false,
   maxCharCount: 0,
   isShowVectorEditor: false,
+  stagedPostConflict: null,
 });
 const postsServiceEndpoint = 'http://localhost:4444/api/posts';
 const generateStagingEndpoint = 'http://localhost:4444/api/generatestaging';
@@ -318,6 +319,58 @@ const methods = {
     if (state.currentPost) {
       return savePost(state.currentPost);
     }
+  },
+
+  async stagePost(postId) {
+    try {
+      const response = await fetch(`http://localhost:4444/api/stage/${postId}`);
+      if (response.status === 409) {
+        const data = await response.json();
+        state.stagedPostConflict = data.stagedPost;
+        return;
+      }
+      if (!response.ok) throw response;
+      state.stagedPostConflict = null;
+      fetchPosts();
+    } catch (error) {
+      console.error('| stagePost error:', error);
+    }
+  },
+
+  async publishPost(postId) {
+    const post = state.postList.find(p => p.id === postId);
+    if (!post) return;
+    try {
+      const response = await fetch('http://localhost:4444/api/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(post),
+      });
+      if (!response.ok) throw response;
+      fetchPosts();
+    } catch (error) {
+      console.error('| publishPost error:', error);
+    }
+  },
+
+  async unstagePost(postId) {
+    const post = state.postList.find(p => p.id === postId);
+    if (!post) return;
+    try {
+      const response = await fetch('http://localhost:4444/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...post, status: 'draft' }),
+      });
+      if (!response.ok) throw response;
+      fetchPosts();
+    } catch (error) {
+      console.error('| unstagePost error:', error);
+    }
+  },
+
+  clearStagedPostConflict() {
+    state.stagedPostConflict = null;
   },
 
   openVectorEditor () {

@@ -12,6 +12,8 @@ const postListRef = ref([]);
 const POST_ACTIONS = {
   PUBLISH: 'publish',
   STAGE: 'stage',
+  UNSTAGE: 'unstage',
+  REPAINT: 'repaint',
   DELETE: 'delete',
 };
 
@@ -34,11 +36,13 @@ const toggleMenu = (postId) => {
   openPostId.value = openPostId.value === postId ? null : postId
 }
 
-// 3. Your custom methods
 const handleAction = (actionName, postId) => {
-  console.log(`Executing ${actionName} for post:`, postId)
-  openPostId.value = null // Close the menu
-}
+  openPostId.value = null;
+  if (actionName === POST_ACTIONS.STAGE)   store.methods.stagePost(postId);
+  if (actionName === POST_ACTIONS.PUBLISH) store.methods.publishPost(postId);
+  if (actionName === POST_ACTIONS.UNSTAGE) store.methods.unstagePost(postId);
+  if (actionName === POST_ACTIONS.REPAINT) store.methods.paintPost(postId);
+};
 
 // 4. Close on click outside logic
 const closeOnOutsideClick = (event) => {
@@ -104,10 +108,14 @@ const playWithPosts = (list) => {
 </script>
 
 <template>
-  <div data-id="post_list_container">
+  <div data-id="post_list_container" ref="menuContainer">
     <div data-id="component-header">
       <h2>Post list</h2>
-    </div>    
+    </div>
+    <div v-if="store.state.stagedPostConflict" class="staged-conflict-warning">
+      <span><strong>{{ store.state.stagedPostConflict.title }}</strong> is currently staged. Publish or un-stage it before staging a new post.</span>
+      <button @click="store.methods.clearStagedPostConflict()">Dismiss</button>
+    </div>
     <div data-id="post_list_search_container">
       <div class="flex">
         <input
@@ -141,7 +149,7 @@ const playWithPosts = (list) => {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(post, index) in store.state.postList" :key="post.id" :class="[post.id === store.state?.currentPost?.id ? 'post-row-highlight' : '']">
+        <tr v-for="(post, index) in store.state.postList" :key="post.id" :class="[post.id === store.state?.currentPost?.id ? 'post-row-highlight' : '', post.status === 'staged' ? 'post-row-staged' : '']">
           <td style="text-align: right; font-size: 9px; padding-right: .2rem">{{ index + 1 }})</td>
           <td>
             <a :href="`/?mode=edit&post=${post.id}`">{{ post.title }}</a>
@@ -162,9 +170,18 @@ const playWithPosts = (list) => {
 
               <!-- The Dropdown List -->
               <div v-if="openPostId === post.id" class="dropdown-menu menu-list" id="kebab-list">
-                <button data-action="edit" @click="handleAction(POST_ACTIONS.PUBLISH, post.id)">Publish</button>
-                <button data-action="share" @click="handleAction(POST_ACTIONS.STAGE, post.id)">Stage</button>
-                <button data-action="delete" @click="handleAction(POST_ACTIONS.DELETE, post.id)">Delete</button>
+                <template v-if="post.status === 'draft'">
+                  <button @click="handleAction(POST_ACTIONS.STAGE, post.id)">Stage</button>
+                  <button @click="handleAction(POST_ACTIONS.DELETE, post.id)">Delete</button>
+                </template>
+                <template v-else-if="post.status === 'staged'">
+                  <button @click="handleAction(POST_ACTIONS.PUBLISH, post.id)">Publish</button>
+                  <button @click="handleAction(POST_ACTIONS.UNSTAGE, post.id)">Un-stage</button>
+                  <button @click="handleAction(POST_ACTIONS.DELETE, post.id)">Delete</button>
+                </template>
+                <template v-else-if="post.status === 'published'">
+                  <button @click="handleAction(POST_ACTIONS.REPAINT, post.id)">Repaint</button>
+                </template>
               </div>
             </div>
             <!--
@@ -274,4 +291,20 @@ tr.post-row-highlight {
 }
 .hidden { display: none; }
 /** end kebab menu */
+
+tr.post-row-staged {
+  background-color: rgb(255, 251, 224);
+}
+.staged-conflict-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .6rem 1rem;
+  margin-bottom: .5rem;
+  background: rgb(255, 243, 190);
+  border: 1px solid rgb(220, 180, 0);
+  border-radius: .3rem;
+  font-size: .9rem;
+}
 </style>
