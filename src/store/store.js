@@ -32,10 +32,14 @@ const sortAlgo = (a, b) => {
   if (!post.body) {
     return;
   }
-  if (!state.currentPostBodyHasChanged && !state.currentPostTitleHasChanged) {
-    console.log('| no content change - no save api post (fetch) required');
+  if (!post.title) {
+    console.warn('| attempt to save post with no title post', post);
     return;
   }
+  // if (!state.currentPostBodyHasChanged && !state.currentPostTitleHasChanged) {
+  //   console.log('| no content change - no save api post (fetch) required');
+  //   return;
+  // }
   console.log('|  content has changed save api post - (fetch)');
   var data = new FormData();
   data.append( "json", JSON.stringify( post ) );

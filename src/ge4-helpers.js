@@ -7,10 +7,5 @@
 export const clearNew = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const postRef = urlParams.get('post');
-  if (postRef && confirm('leave this post?')) {
-    document.location.href = './?mode=edit';
-  }
-  else {
-    document.location.href = './?mode=edit';
-  }
+  document.location.href = './?mode=edit';
 };

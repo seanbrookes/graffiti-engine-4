@@ -4,11 +4,9 @@ import { PostEditor } from '../post_editor/';
 import { ref, inject, reactive, watch } from 'vue';
 
 const store = inject('store');
-
-
-let uxMode = '';
 const urlParams = new URLSearchParams(window.location.search);
-uxMode = urlParams.get('mode');
+
+let uxMode =  urlParams.get('mode') || 'edit';
 
 const currentPostId = urlParams.get('post');
 
