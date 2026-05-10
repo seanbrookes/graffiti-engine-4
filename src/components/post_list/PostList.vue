@@ -15,6 +15,7 @@ const POST_ACTIONS = {
   UNSTAGE: 'unstage',
   REPAINT: 'repaint',
   DELETE: 'delete',
+  UNPUBLISH: 'unpublish',
 };
 
 const state = reactive({
@@ -38,10 +39,11 @@ const toggleMenu = (postId) => {
 
 const handleAction = (actionName, postId) => {
   openPostId.value = null;
-  if (actionName === POST_ACTIONS.STAGE)   store.methods.stagePost(postId);
-  if (actionName === POST_ACTIONS.PUBLISH) store.methods.publishPost(postId);
-  if (actionName === POST_ACTIONS.UNSTAGE) store.methods.unstagePost(postId);
-  if (actionName === POST_ACTIONS.REPAINT) store.methods.paintPost(postId);
+  if (actionName === POST_ACTIONS.STAGE)     store.methods.stagePost(postId);
+  if (actionName === POST_ACTIONS.PUBLISH)   store.methods.publishPost(postId);
+  if (actionName === POST_ACTIONS.UNSTAGE)   store.methods.unstagePost(postId);
+  if (actionName === POST_ACTIONS.REPAINT)   store.methods.paintPost(postId);
+  if (actionName === POST_ACTIONS.UNPUBLISH) store.methods.unpublishPost(postId);
 };
 
 // 4. Close on click outside logic
@@ -181,6 +183,7 @@ const playWithPosts = (list) => {
                 </template>
                 <template v-else-if="post.status === 'published'">
                   <button @click="handleAction(POST_ACTIONS.REPAINT, post.id)">Repaint</button>
+                  <button @click="handleAction(POST_ACTIONS.UNPUBLISH, post.id)">Unpublish</button>
                 </template>
               </div>
             </div>

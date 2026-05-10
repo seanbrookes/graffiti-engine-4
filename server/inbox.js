@@ -103,8 +103,7 @@ server.post('/api/inbox', async (req, res) => {
         slug     = PostSlug.replace(/[^a-zA-Z0-9-_]/g, ''); 
         
         fileName = `${slug}.html`;
-        // Create the directory path: local-web-cloud/year/month
-        fileDir  = path.join(BLOG_ROOT_DIR, pubYear, pubMonth);
+        fileDir  = path.join(BLOG_ROOT_DIR, 'blog', pubYear, pubMonth);
         wh_log(`| GE: Processing ${slug} (${pubYear}/${pubMonth})`, IsLogging);
     }
     

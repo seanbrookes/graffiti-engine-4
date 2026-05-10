@@ -11,8 +11,10 @@ import { parse } from 'parse5';
 
 
 
-// TODO - this will need to be more dynamic
 const PORT = 4444;
+const LIVE_URL    = process.env.LIVE_URL;
+const LIVE_KEY    = process.env.LIVE_KEY;
+const STAGING_KEY = '__DEV_KEY__';
 const server = express();
 server.use(express.json());
 /*
@@ -100,9 +102,8 @@ const getStagedPost = () => {
 const getPostLink = (post) => {
   const pDate = new Date(post.publishDate);
   const pubYear = pDate.getFullYear();
-  const pubMonth = (pDate.getMonth() + 1);
-  // Use year/month/slug.html structure to match the inbox file saving path.
-  return `${pubYear}/${pubMonth}/${post.slug}.html`;
+  const pubMonth = pDate.getMonth() + 1;
+  return `blog/${pubYear}/${pubMonth}/${post.slug}.html`;
 };
 
 /**
@@ -121,34 +122,26 @@ const getCompiledIndex = async (posts) => {
   } catch (e) {
     throw new Error('homeTemplate.html not found in ./server/templates/');
   }
-  let listMarkup = '<ul class="Blog__HomePostList">';
+  let listMarkup = '<ul class="post-list">';
 
-  // Logic based on the original system: first 3 posts full content, the rest are links
   for (let i = 0; i < posts.length; i++) {
     const post = posts[i];
     const postLink = getPostLink(post);
     const pDate = new Date(post.publishDate);
-    // Simple date format for display on index
-    const publishDate = `${pDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-    
-    // Ensure post has necessary fields
+    const publishDate = pDate.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+
     if (!post.body || !post.title) continue;
 
-    listMarkup += '<li class="Layout Spread Flow">';
+    listMarkup += '<li class="post-list-item">';
 
     if (i < 3) {
-      // First 3: Full content (convert markdown to HTML now)
-      // This is a simplified version of the old logic: full post body is included.
       const postHtmlBody = converter.makeHtml(post.body);
-
-      listMarkup += `<a href="${postLink}" class="Blog__HomePostTitle"><h3 class="Blog__HomePostTitle">${post.title}</h3></a>`;
-      listMarkup += `<span>published: ${publishDate}</span>`;
-      listMarkup += `<div>${postHtmlBody}</div>`;
-      
+      listMarkup += `<a href="${postLink}"><h2>${post.title}</h2></a>`;
+      listMarkup += `<time datetime="${post.publishDate}">${publishDate}</time>`;
+      listMarkup += `<div class="post-body">${postHtmlBody}</div>`;
     } else {
-      // Remaining posts: Just a link and publish date
-      listMarkup += `<a href="${postLink}" class="Blog__HomePostTitle">${post.title}</a>`;
-      listMarkup += `<span>published: ${publishDate}</span>`;
+      listMarkup += `<a href="${postLink}">${post.title}</a>`;
+      listMarkup += `<time datetime="${post.publishDate}">${publishDate}</time>`;
     }
 
     listMarkup += '</li>';
@@ -170,7 +163,7 @@ const getCompiledIndex = async (posts) => {
  * Orchestrates the full process of generating the index.html and sending it to the inbox.
  * @param {Object} targetConfig - The configuration object for the target host/port/key/logging.
  */
-const generateHomePage = async (targetConfig, stagedPost = null) => {
+const generateHomePage = async (targetConfig, stagedPost = null, postFn = postToStaging) => {
   try {
     const publishedPosts = getPublishedPosts();
     console.log(`| generateHomePage: Found ${publishedPosts.length} published posts.`);
@@ -202,7 +195,7 @@ const generateHomePage = async (targetConfig, stagedPost = null) => {
     
     // 4. Send the POST request
     const post_data = querystring.stringify(rawPostData);
-    await postToStaging(post_data);
+    await postFn(post_data);
     
     console.log('| generateHomePage: Successfully posted index.html to staging.');
     
@@ -461,18 +454,18 @@ const getCompiledPost = async (post) => {
   } catch (e) {
     throw new Error('postTemplate.html not found in ./server/templates/');
   }
-  var pubDate = new Date(post.publishDate);
 
   const publishDate = new Date(post.publishDate);
   post.publishYear = publishDate.getFullYear();
-  post.publishMonth = (publishDate.getMonth() + 1);
+  post.publishMonth = publishDate.getMonth() + 1;
+  post.publishDateFormatted = publishDate.toLocaleDateString('en-CA', {
+    year: 'numeric', month: 'long', day: 'numeric'
+  });
+  if (!post.author) post.author = 'Sean Brookes';
   post.markup = converter.makeHtml(post.body);
 
-  var compiled = _.template(templateData);
-
-  const publishDoc = compiled(post);
-  return publishDoc;
-
+  const compiled = _.template(templateData);
+  return compiled(post);
 };
 
 const postTheDamnDocument = async (post_data, arg2, arg3) => {
@@ -502,6 +495,25 @@ const postTheDamnDocument = async (post_data, arg2, arg3) => {
   }
 };
 
+
+const postToLive = async (post_data) => {
+  const urlPath = LIVE_URL;
+  console.log('| postToLive sending to', urlPath);
+  const response = await fetch(urlPath, {
+    method: 'POST',
+    body: post_data,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    }
+  });
+  const data = await response.text();
+  if (response.ok) {
+    console.log('| postToLive success:', data);
+  } else {
+    console.error('| postToLive failed:', response.status, data);
+    throw new Error(`postToLive failed with status ${response.status}: ${data}`);
+  }
+};
 
 const postToStaging = async (post_data, arg2, arg3) => {
   console.log('| postToStaging 1');
@@ -606,6 +618,41 @@ server.get('/api/generatestaging', async (req, res) => {
 });
 
 
+server.get('/api/deploylive', async (req, res) => {
+  const publishedPosts = getPublishedPosts();
+  if (publishedPosts.length === 0) {
+    return res.status(200).send({ message: 'No published posts to deploy.' });
+  }
+
+  const errors = [];
+  const postPromises = publishedPosts.map(postItem => {
+    if (!postItem.author) postItem.author = 'Sean Brookes';
+    return getCompiledPost(postItem)
+      .then(postBody => postToLive(querystring.stringify({
+        ApiKey: LIVE_KEY,
+        PostPublishYear: postItem.publishYear,
+        PostPublishMonth: postItem.publishMonth,
+        IsLogging: 'true',
+        PostSlug: postItem.slug,
+        PostBody: postBody
+      })))
+      .catch(err => {
+        console.error(`| deploylive error for "${postItem.title}":`, err.message);
+        errors.push({ title: postItem.title, error: err.message });
+      });
+  });
+
+  await Promise.all(postPromises);
+  await generateHomePage({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, null, postToLive);
+
+  if (errors.length > 0) {
+    res.status(207).send({ message: 'Deployed with some errors.', errors });
+  } else {
+    res.status(200).send({ message: `Deployed ${publishedPosts.length} posts to live.` });
+  }
+});
+
+
 server.get('/api/stage/:id', async (req, res) => {
   const postId = req.params.id;
   let post;
@@ -629,6 +676,7 @@ server.get('/api/stage/:id', async (req, res) => {
 
   post.status = 'staged';
   post.lastUpdate = saveTimestamp;
+  if (!post.author) post.author = 'Sean Brookes';
 
   fs.writeFileSync(`./server/posts/${postId}.json`, JSON.stringify(post));
 
@@ -651,76 +699,87 @@ server.get('/api/stage/:id', async (req, res) => {
 });
 
 
-server.post('/api/publish', (req, res) => {
+server.post('/api/publish', async (req, res) => {
   const post = req.body;
   const author = 'Sean Brookes';
-  if (!post || !post.body) {
-    res.sendStatus(500);
-    res.send({message: 'not saved missing post body'});
-    return;
-  }
 
+  if (!post || !post.body) {
+    return res.status(500).send({ message: 'not saved missing post body' });
+  }
   if (!post.id) {
-    res.sendStatus(500);
-    res.send({message: 'not published missing post id'});
-    return;
+    return res.status(500).send({ message: 'not published missing post id' });
   }
   if (!post.slug) {
     post.slug = getSlug(post.title);
   }
 
-  /**
-   *
-   * Establish the publish date
-   * note this may not be valid in case
-   * there is a failure in the flow
-   *
-   * */
-  post.publishDate = new Date();
-  post.publishYear = post.publishDate.getFullYear();
-  post.publishMonth = (post.publishDate.getMonth() + 1);
-  post.publishDay = (post.publishDate.getDate());
-  post.lastUpdate = new Date();
+  const publishDate = new Date();
+  post.publishDate = publishDate;
+  post.publishYear = publishDate.getFullYear();
+  post.publishMonth = publishDate.getMonth() + 1;
+  post.publishDay = publishDate.getDate();
+  post.lastUpdate = publishDate;
   post.author = author;
   post.status = 'published';
-  post.isLogging = 'true';
-  post.apiKey = 'eDj4Ax0KZyk8fHe6MpJHKgBkw8JDXKtO';
 
-  var targetConfig = {
-    host: 'localhost',
-    port: '9999', // Updated to 9999 to match inbox.js config
-    path: '/api/inbox',
-    isLoggingOn: 'true',
-    apiKey: '__DEV_KEY__' // Changed to __DEV_KEY__ to match inbox.js EXPECTED_API_KEY
-  };
-  
-  // Use a promise-based approach to control the flow
-  const publishProcess = postPost(targetConfig, post)
-    .then(() => {
-      // 1. Post to inbox successful, now save post locally
-      return new Promise((resolve, reject) => {
-        fs.writeFile(`./server/posts/${post.id}.json`, JSON.stringify(post), err => { 
-          if (err) {
-            console.error('| Error saving post locally after publish:', err);
-            return reject(err);
-          }
-          console.log('| Post saved locally.');
-          resolve();
-        });
+  try {
+    // 1. Compile post HTML
+    const postBody = await getCompiledPost(post);
+
+    // 2. Send to live server
+    await postToLive(querystring.stringify({
+      ApiKey: LIVE_KEY,
+      PostPublishYear: post.publishYear,
+      PostPublishMonth: post.publishMonth,
+      IsLogging: 'true',
+      PostSlug: post.slug,
+      PostBody: postBody
+    }));
+
+    // 3. Mirror to local staging
+    await postToStaging(querystring.stringify({
+      ApiKey: STAGING_KEY,
+      PostPublishYear: post.publishYear,
+      PostPublishMonth: post.publishMonth,
+      IsLogging: 'true',
+      PostSlug: post.slug,
+      PostBody: postBody
+    }));
+
+    // 4. Persist published status locally
+    await new Promise((resolve, reject) => {
+      fs.writeFile(`./server/posts/${post.id}.json`, JSON.stringify(post), err => {
+        if (err) return reject(err);
+        resolve();
       });
-    })
-    .then(() => {
-      // 2. Local save successful, now generate and post home page
-      return generateHomePage(targetConfig);
-    })
-    .then(() => {
-      // 3. All steps complete, send success response
-      res.status(200).send({status: 200, message: 'published'});
-    })
-    .catch((error) => {
-      console.error('| Publish flow failed:', error);
-      res.status(500).send({message: 'Publish flow failed.', details: error.message});
     });
+
+    // 5. Regenerate home page on live and local
+    await generateHomePage({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, null, postToLive);
+    await generateHomePage({ apiKey: STAGING_KEY, isLoggingOn: 'true' });
+
+    res.status(200).send({ status: 200, message: 'published' });
+  } catch (error) {
+    console.error('| Publish flow failed:', error);
+    res.status(500).send({ message: 'Publish flow failed.', details: error.message });
+  }
+});
+
+server.post('/api/unpublish/:id', (req, res) => {
+  const postId = req.params.id;
+  const filePath = `./server/posts/${postId}.json`;
+  if (!postId || !fs.existsSync(filePath)) {
+    return res.status(404).send({ message: 'Post not found' });
+  }
+  try {
+    const post = JSON.parse(fs.readFileSync(filePath));
+    post.status = 'draft';
+    post.lastUpdate = new Date().getTime();
+    fs.writeFileSync(filePath, JSON.stringify(post));
+    res.status(200).send({ message: 'Post unpublished', post });
+  } catch (e) {
+    res.status(500).send({ message: 'Failed to unpublish post', error: e.message });
+  }
 });
 
 server.get('*', (req, res) => {

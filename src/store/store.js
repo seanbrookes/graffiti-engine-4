@@ -243,6 +243,15 @@ const methods = {
     return generateStaging();
   },
 
+  async deploySite() {
+    const response = await fetch('http://localhost:4444/api/deploylive', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error(`deploylive failed: ${response.status}`);
+    return response.json();
+  },
+
   getData1 () {
     return state.data_1;
   },
@@ -366,6 +375,19 @@ const methods = {
       fetchPosts();
     } catch (error) {
       console.error('| unstagePost error:', error);
+    }
+  },
+
+  async unpublishPost(postId) {
+    try {
+      const response = await fetch(`http://localhost:4444/api/unpublish/${postId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw response;
+      fetchPosts();
+    } catch (error) {
+      console.error('| unpublishPost error:', error);
     }
   },
 

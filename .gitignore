@@ -1,3 +1,6 @@
+.env
+inbox/config.php
+
 # Logs
 logs
 *.log
@@ -51,3 +54,5 @@ npm-debug.log
 /public/images
 
 /four_five_six_config
+.claude/settings.local.json
+graffiti-start.sh
