@@ -3,7 +3,33 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title><%= title %> — fourfivesix.ca</title>
+    <meta name="description" content="<%= descriptionAttr %>">
+    <meta name="author" content="<%= author %>">
+    <meta name="robots" content="index, follow">
+    <% if (canonicalUrl) { %><link rel="canonical" href="<%= canonicalUrl %>"><% } %>
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="<%= titleAttr %>">
+    <meta property="og:description" content="<%= descriptionAttr %>">
+    <meta property="og:site_name" content="fourfivesix.ca">
+    <meta property="og:locale" content="en_CA">
+    <% if (canonicalUrl) { %><meta property="og:url" content="<%= canonicalUrl %>"><% } %>
+    <meta property="article:published_time" content="<%= publishDate %>">
+    <meta property="article:author" content="<%= author %>">
+    <% if (updatedDate) { %><meta property="article:modified_time" content="<%= updatedDate %>"><% } %>
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="<%= titleAttr %>">
+    <meta name="twitter:description" content="<%= descriptionAttr %>">
+
+    <!-- Structured Data -->
+    <script type="application/ld+json"><%= jsonLd %></script>
+
+    <link rel="alternate" type="application/rss+xml" title="fourfivesix.ca" href="/feed.xml">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -11,11 +37,12 @@
         <a href="/" aria-label="fourfivesix home">fourfivesix</a>
     </header>
     <main>
-        <article>
+        <article class="post--<%= slug %>">
             <h1><%= title %></h1>
             <div class="post-meta">
                 <time datetime="<%= publishDate %>"><%= publishDateFormatted %></time>
                 <span class="post-author"><%= author %></span>
+                <% if (updatedDate) { %><time class="post-updated" datetime="<%= updatedDate %>">Updated: <%= updatedDateFormatted %></time><% } %>
             </div>
             <div class="post-body">
                 <%= markup %>

@@ -3,7 +3,7 @@ import { ref, inject, reactive, watch, computed, onMounted, onUnmounted } from '
 import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown } from '@codemirror/lang-markdown';
-import {EditorState} from "@codemirror/state"
+import {EditorState, Compartment} from "@codemirror/state"
 import { marked } from 'marked';
 import { mangle } from "marked-mangle";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -63,6 +63,12 @@ const title = ref('Graffiti Engine');
 const previewEl = ref(null);
 const editorEl = ref(null);
 
+// Escape HTML entities for raw-text rendering (mirrors the server's escapeXml)
+const escapeHtml = (str) => (str || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;');
+
 const renderCodeMirror = () => {
   console.log('| renderCodeMirror componentState.isShowPreview ', componentState.isShowPreview);
   /**
@@ -73,15 +79,43 @@ const renderCodeMirror = () => {
    */
   if (componentState.isShowPreview) {
     componentState.previewToggleText = 'edit';
-    const editorEl = document.getElementById('editor');
+    const post = store?.state?.currentPost || {};
+    const slug = post.slug || '';
+    const postTitle = post.title || '';
+    const publishDate = post.publishDate || '';
+    const publishDateFormatted = publishDate
+      ? new Date(publishDate).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
+      : '';
+    const author = post.author || '';
+
     marked.use(mangle());
     marked.use(gfmHeadingId(markedOptions));
-    const currentHTML = store?.state?.currentPost?.body ? marked.parse(store?.state?.currentPost?.body) : '';    
-    previewEl.value.innerHTML = currentHTML;
+    let bodyHtml;
+    if (bodyMode.value === 'html') {
+      bodyHtml = post.body || '';
+    } else if (bodyMode.value === 'text') {
+      bodyHtml = `<pre>${escapeHtml(post.body)}</pre>`;
+    } else {
+      bodyHtml = post.body ? marked.parse(post.body) : '';
+    }
 
+    const metaHtml = (publishDateFormatted || author) ? `
+      <div class="post-meta">
+        ${publishDateFormatted ? `<time datetime="${publishDate}">${publishDateFormatted}</time>` : ''}
+        ${author ? `<span class="post-author">${author}</span>` : ''}
+      </div>` : '';
+
+    previewEl.value.className = 'ge4-preview';
+    previewEl.value.innerHTML = `
+      <article class="post--${slug}">
+        <h1>${postTitle}</h1>
+        ${metaHtml}
+        <div class="post-body">${bodyHtml}</div>
+      </article>`;
   }
   else {
     previewEl.value.innerHTML = null;
+    previewEl.value.className = '';
   }
   /**
    * 
@@ -107,13 +141,17 @@ const renderCodeMirror = () => {
 
 
 let sync_val = null;
+const languageConf = new Compartment();
 const initialEditorState = {
   doc: store?.state?.currentPost?.body,
   extensions: [
     EditorView.updateListener.of(function(e) {
       sync_val = e.state.doc.toString();
     }),
-    basicSetup, markdown(),
+    basicSetup,
+    languageConf.of(markdown()),
+    EditorView.lineWrapping,
+    EditorView.contentAttributes.of({ spellcheck: 'true' }),
   ]
 };
 const editorState = EditorState.create(initialEditorState);
@@ -175,7 +213,7 @@ const typingStatus = () => {
 
 
 onUnmounted(() => {
-  document.removeEventListener('keypress', typingStatus);   
+  document.removeEventListener('keypress', typingStatus);
 });
 
 
@@ -201,6 +239,40 @@ const currentTitle = computed({
 
 
 
+
+// Supported body formats, in cycle order. 'text' = raw text (escaped), 'markdown', 'html' = raw fragment.
+const BODY_MODES = ['markdown', 'html', 'text'];
+
+// CodeMirror syntax highlighting per mode (no dedicated html/text langs are imported)
+const languageFor = (mode) => {
+  if (mode === 'html') return javascript();
+  if (mode === 'text') return [];
+  return markdown();
+};
+
+const bodyMode = computed({
+  get() { return store?.state?.currentPost?.bodyMode || 'markdown'; },
+  set(mode) {
+    store.methods.updateCurrentPostBodyMode(mode);
+    editor.dispatch({
+      effects: languageConf.reconfigure(languageFor(mode))
+    });
+    startAutosaveTimer();
+  }
+});
+
+const currentSummary = computed({
+  get() { return store?.state?.currentPost?.summary || ''; },
+  set(value) {
+    store.methods.updateCurrentPostSummary(value);
+    startAutosaveTimer();
+  }
+});
+
+const toggleBodyMode = () => {
+  const idx = BODY_MODES.indexOf(bodyMode.value);
+  bodyMode.value = BODY_MODES[(idx + 1) % BODY_MODES.length];
+};
 
 watch(isAutoSave, (enabled) => {
   if (enabled) {
@@ -344,8 +416,10 @@ d3.interval(function() {
   </div>
   <div class="sticky-head" data-id="editor-controls-container">
     <button @click="clearNew">new post</button>
-    <!-- <button value="editor" @click="setTabView">editor</button>-->
-    <button value="preview" @click="toggleTabView">{{ componentState.previewToggleText }}</button>
+    <div class="flex">
+      <button value="preview" @click="toggleTabView">{{ componentState.previewToggleText }}</button>
+      <button @click="toggleBodyMode" :data-mode="bodyMode" data-id="body-mode-toggle">{{ bodyMode }}</button>
+    </div>
   </div>
   <!-- marked preview -->
   <div id="editor" ref="previewEl" data-id="editor-preview-container"></div> 
@@ -353,6 +427,13 @@ d3.interval(function() {
     <div data-id="editor_title_input_container">
       <label>Title</label>
       <input v-model="currentTitle" type="text" data-id="post_title_text_input" ref="postTitleInputEl" />
+    </div>
+    <div data-id="editor_summary_input_container">
+      <div class="summary-label-row">
+        <label>Description</label>
+        <span class="char-hint" :class="{ 'char-hint-warn': currentSummary.length > 160 }">{{ currentSummary.length }} / 160</span>
+      </div>
+      <textarea v-model="currentSummary" rows="2" spellcheck="true" data-id="post_summary_textarea" placeholder="Brief description for search engines and social previews — leave blank to auto-generate from post body"></textarea>
     </div>
     <div data-id="editor_input_container">
       <!-- codemirror edting -->
@@ -433,8 +514,48 @@ d3.interval(function() {
 [data-id="editor-preview-container"] {
   padding: 1rem;
 }
+[data-id="editor-preview-container"].ge4-preview {
+  padding: 2rem;
+  border: 1px dashed #dddddd;
+  border-radius: 0.25rem;
+  background: #ffffff;
+}
 [data-id="editor_view_container"] {
   padding: 1rem;
+}
+[data-id="editor_summary_input_container"] {
+  padding: .3rem 0;
+}
+.summary-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: .2rem;
+}
+[data-id="editor_summary_input_container"] label {
+  font-size: 11px;
+  color: #777777;
+  text-transform: uppercase;
+  font-family: 'Courier New', Courier, monospace;
+}
+.char-hint {
+  font-size: 10px;
+  color: #aaaaaa;
+  font-family: 'Courier New', Courier, monospace;
+}
+.char-hint-warn {
+  color: #cc5500;
+}
+[data-id="post_summary_textarea"] {
+  width: 100%;
+  padding: .2rem;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid #dddddd;
+  border-radius: .2rem;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
 }
 [data-id="editor_input_container"] {
   border: 1px solid #eeeeee;
@@ -478,5 +599,20 @@ d3.interval(function() {
   visibility: visible;
   opacity: .7;
   transition: opacity 0.5s linear;
+}
+[data-id="body-mode-toggle"] {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #777777;
+}
+[data-id="body-mode-toggle"][data-mode="html"] {
+  color: #cc5500;
+  border-color: #cc5500;
+}
+[data-id="body-mode-toggle"][data-mode="text"] {
+  color: #0055cc;
+  border-color: #0055cc;
 }
 </style>
