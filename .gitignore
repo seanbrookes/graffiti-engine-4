@@ -56,3 +56,5 @@ npm-debug.log
 /four_five_six_config
 .claude/settings.local.json
 graffiti-start.sh
+
+/tmp/
