@@ -1,0 +1,316 @@
+/* ============================================================
+   fourfivesix.ca — global stylesheet
+   Baseline: 1rem = 16px (set on html element below)
+   ============================================================ */
+
+/* --- Reset & Box Model ------------------------------------ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Custom Properties (Theme Contract) ------------------- */
+
+:root {
+  --color-bg:      #ffffff;
+  --color-text:    #1a1a1a;
+  --color-muted:   #666666;
+  --color-subtle:  #999999;
+  --color-border:  #e0e0e0;
+  --color-accent:  #0055cc;
+
+  --font-body:  Georgia, 'Times New Roman', serif;
+  --font-ui:    Helvetica, Arial, sans-serif;
+  --font-mono:  'Courier New', Courier, monospace;
+
+  --width-content: 60rem;
+  --spacing-page:  2rem;
+  --spacing-tight: 1rem;
+}
+
+/* --- Links ------------------------------------------------ */
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* --- Page Layout ------------------------------------------ */
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+header,
+footer {
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  padding: var(--spacing-tight) var(--spacing-page);
+}
+
+header {
+  border-bottom: 1px solid var(--color-border);
+}
+
+header a {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+header a:hover {
+  color: var(--color-accent);
+}
+
+footer {
+  margin-top: auto;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+}
+
+footer a {
+  color: var(--color-muted);
+}
+
+footer a:hover {
+  color: var(--color-accent);
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--width-content);
+  margin: 0 auto;
+  padding: var(--spacing-page) var(--spacing-page);
+}
+
+/* --- Article (Post Page) ---------------------------------- */
+
+article h1 {
+  font-family: var(--font-ui);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 0.75rem 0;
+}
+
+.post-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.post-meta time {
+  /* no extra styling needed — inherits muted color above */
+}
+
+.post-author::before {
+  content: '·';
+  margin-right: 1rem;
+}
+
+.post-updated::before {
+  content: '·';
+  margin-right: 1rem;
+}
+
+.post-updated {
+  font-style: italic;
+}
+
+/* --- Post Body Typography --------------------------------- */
+
+.post-body {
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.post-body h2 {
+  font-family: var(--font-ui);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 2rem 0 0.5rem;
+}
+
+.post-body h3 {
+  font-family: var(--font-ui);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.post-body p {
+  margin: 0 0 1rem 0;
+}
+
+.post-body ul,
+.post-body ol {
+  margin: 0 0 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.post-body li {
+  margin-bottom: 0.25rem;
+}
+
+.post-body blockquote {
+  margin: 1.5rem 0;
+  padding: 0.5rem 0 0.5rem 1.25rem;
+  border-left: 3px solid var(--color-border);
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.post-body pre,
+.post-body code {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+
+.post-body pre {
+  background: #f4f4f4;
+  padding: 1rem;
+  overflow-x: auto;
+  border-radius: 0.25rem;
+  margin: 0 0 1rem 0;
+}
+
+.post-body code {
+  background: #f4f4f4;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.2rem;
+}
+
+.post-body pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.post-body img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* --- Home Page Post List ---------------------------------- */
+
+.post-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.post-list-item {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.post-list-item:first-child {
+  border-top: 1px solid var(--color-border);
+}
+
+.post-list-item a {
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.post-list-item a:hover {
+  color: var(--color-accent);
+}
+
+.post-list-item h2 {
+  font-family: var(--font-ui);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.3;
+}
+
+/* Tier 1 — full post body inline */
+.post-list-item--full .post-body {
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  margin-top: 0.75rem;
+}
+
+/* Tier 3 — title link + inline date */
+.post-list-item--link {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+}
+
+.post-list-item--link a {
+  font-family: var(--font-ui);
+  font-size: 0.9375rem;
+}
+
+.post-list-date {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+/* Meta row (tiers 1 & 2) */
+.post-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  margin: 0.25rem 0 0.5rem 0;
+}
+
+.post-list-author::before {
+  content: '·';
+  margin-right: 0.75rem;
+}
+
+/* Tier 2 — excerpt */
+.post-excerpt {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+/* --- Responsive ------------------------------------------- */
+
+@media (max-width: 600px) {
+  :root {
+    --spacing-page: 1rem;
+  }
+
+  article h1 {
+    font-size: 1.375rem;
+  }
+}

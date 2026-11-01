@@ -4,7 +4,11 @@ import http from 'http';
 import cors from 'cors';
 import TurndownService from 'turndown';
 import _ from 'lodash';
-import showdown from 'showdown';
+import { marked } from 'marked';
+import { mangle } from 'marked-mangle';
+import { gfmHeadingId } from 'marked-gfm-heading-id';
+import DOMPurify from 'dompurify';
+import { JSDOM } from 'jsdom';
 import querystring from 'querystring';
 import fetch from 'node-fetch';
 import { parse } from 'parse5';
@@ -14,15 +18,64 @@ import { parse } from 'parse5';
 const PORT = 4444;
 const LIVE_URL    = process.env.LIVE_URL;
 const LIVE_KEY    = process.env.LIVE_KEY;
+const SITE_URL         = process.env.SITE_URL || '';
+const SITE_DESCRIPTION = process.env.SITE_DESCRIPTION || '';
 const STAGING_KEY = '__DEV_KEY__';
+
+const getExcerpt = (body, maxLength = 160) => {
+  if (!body) return '';
+  const text = body
+    .replace(/!\[.*?\]\(.*?\)/g, '')
+    .replace(/\[([^\]]+)\]\(.*?\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s+/gm, '')
+    .replace(/`{1,3}[^`]*`{1,3}/g, '')
+    .replace(/[*_~]+/g, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/\n+/g, ' ')
+    .trim();
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength).replace(/\s+\S*$/, '') + '...';
+};
+
+const escapeAttr = (str) => {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+};
+
+const escapeXml = (str) => {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+};
 const server = express();
-server.use(express.json());
+server.use(express.json({ limit: '10mb' }));
 /*
 
 So, bodyParser.json() and bodyParser.urlencoded() are built into Express as express.json() and express.urlencoded() so you don't have to import body-parser at all.
 */
 server.use(cors());
-const converter = new showdown.Converter();
+
+const window = new JSDOM('').window;
+const purify = DOMPurify(window);
+
+marked.use(mangle());
+marked.use(gfmHeadingId({ prefix: 'gfe-' }));
+
+// Render a post body to HTML according to its declared format.
+// bodyMode: 'text' (escaped, whitespace preserved) | 'html' (verbatim) | 'markdown' (default)
+const renderBody = (post) => {
+  const body = post.body || '';
+  switch (post.bodyMode) {
+    case 'html':
+      return purify.sanitize(body);
+    case 'text':
+      return `<pre>${escapeXml(body)}</pre>`;
+    case 'markdown':
+    default:
+      return purify.sanitize(marked.parse(body));
+  }
+};
 
 
 const getSlug = (title) => {
@@ -38,6 +91,17 @@ const guid = () => {
   }
   //return id of format 'aaaaaaaa'-'aaaa'-'aaaa'-'aaaa'-'aaaaaaaaaaaa'
   return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
+};
+
+const copyStaticAssets = () => {
+  const src = './server/static';
+  const dest = './local-web-cloud';
+  try {
+    fs.cpSync(src, dest, { recursive: true });
+    console.log('| copyStaticAssets: copied server/static → local-web-cloud');
+  } catch (err) {
+    console.error('| copyStaticAssets failed:', err.message);
+  }
 };
 
 const getPublishedPosts = () => {
@@ -122,6 +186,9 @@ const getCompiledIndex = async (posts) => {
   } catch (e) {
     throw new Error('homeTemplate.html not found in ./server/templates/');
   }
+  const FULL_COUNT    = 2; // render full post body
+  const EXCERPT_COUNT = 4; // render excerpt after the full posts; rest are title links
+
   let listMarkup = '<ul class="post-list">';
 
   for (let i = 0; i < posts.length; i++) {
@@ -129,28 +196,53 @@ const getCompiledIndex = async (posts) => {
     const postLink = getPostLink(post);
     const pDate = new Date(post.publishDate);
     const publishDate = pDate.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+    const author = post.author || 'Sean Brookes';
 
     if (!post.body || !post.title) continue;
 
-    listMarkup += '<li class="post-list-item">';
+    const metaBlock =
+      `<div class="post-list-meta">` +
+      `<time datetime="${post.publishDate}">${publishDate}</time>` +
+      `<span class="post-list-author">${author}</span>` +
+      `</div>`;
 
-    if (i < 3) {
-      const postHtmlBody = converter.makeHtml(post.body);
+    if (i < FULL_COUNT) {
+      // Tier 1: full rendered body
+      const markup = renderBody(post);
+      listMarkup += `<li class="post-list-item post-list-item--full post--${post.slug}">`;
       listMarkup += `<a href="${postLink}"><h2>${post.title}</h2></a>`;
-      listMarkup += `<time datetime="${post.publishDate}">${publishDate}</time>`;
-      listMarkup += `<div class="post-body">${postHtmlBody}</div>`;
+      listMarkup += metaBlock;
+      listMarkup += `<div class="post-body">${markup}</div>`;
+      listMarkup += `</li>`;
+    } else if (i < FULL_COUNT + EXCERPT_COUNT) {
+      // Tier 2: excerpt card
+      const excerpt = post.summary || getExcerpt(post.body, 200);
+      listMarkup += `<li class="post-list-item post-list-item--excerpt post--${post.slug}">`;
+      listMarkup += `<a href="${postLink}"><h2>${post.title}</h2></a>`;
+      listMarkup += metaBlock;
+      if (excerpt) listMarkup += `<p class="post-excerpt">${excerpt}</p>`;
+      listMarkup += `</li>`;
     } else {
+      // Tier 3: title link with date
+      listMarkup += `<li class="post-list-item post-list-item--link post--${post.slug}">`;
       listMarkup += `<a href="${postLink}">${post.title}</a>`;
-      listMarkup += `<time datetime="${post.publishDate}">${publishDate}</time>`;
+      listMarkup += `<time class="post-list-date" datetime="${post.publishDate}">${publishDate}</time>`;
+      listMarkup += `</li>`;
     }
-
-    listMarkup += '</li>';
   }
   listMarkup += '</ul>';
 
+  const homeUrl = SITE_URL ? `${SITE_URL}/` : '';
   const indexData = {
-    // The compiled post list will be available in the template as `markup`
-    markup: listMarkup
+    markup: listMarkup,
+    canonicalUrl: homeUrl,
+    description: escapeAttr(SITE_DESCRIPTION),
+    jsonLd: JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: 'fourfivesix.ca',
+      url: SITE_URL || 'https://fourfivesix.ca'
+    }, null, 2)
   };
 
   const compiled = _.template(templateData);
@@ -207,6 +299,59 @@ const generateHomePage = async (targetConfig, stagedPost = null, postFn = postTo
 
 
 
+const generateFeed = async (targetConfig, postFn = postToStaging) => {
+  try {
+    const publishedPosts = getPublishedPosts();
+    if (publishedPosts.length === 0) return;
+
+    publishedPosts.sort((a, b) => new Date(b.publishDate) - new Date(a.publishDate));
+
+    const siteUrl  = SITE_URL || 'https://fourfivesix.ca';
+    const feedUrl  = `${siteUrl}/feed.xml`;
+    const buildDate = new Date().toUTCString();
+
+    let items = '';
+    for (const post of publishedPosts.slice(0, 20)) {
+      const link        = `${siteUrl}/${getPostLink(post)}`;
+      const pubDate     = new Date(post.publishDate).toUTCString();
+      const description = escapeXml(post.summary || getExcerpt(post.body, 300));
+      const title       = escapeXml(post.title);
+      items +=
+        `<item>` +
+        `<title>${title}</title>` +
+        `<link>${link}</link>` +
+        `<guid isPermaLink="true">${link}</guid>` +
+        `<pubDate>${pubDate}</pubDate>` +
+        `<description>${description}</description>` +
+        `</item>`;
+    }
+
+    const feedXml =
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">` +
+      `<channel>` +
+      `<title>${escapeXml('fourfivesix.ca')}</title>` +
+      `<link>${siteUrl}</link>` +
+      `<description>${escapeXml(SITE_DESCRIPTION || 'fourfivesix.ca')}</description>` +
+      `<language>en-ca</language>` +
+      `<lastBuildDate>${buildDate}</lastBuildDate>` +
+      `<atom:link href="${feedUrl}" rel="self" type="application/rss+xml"/>` +
+      items +
+      `</channel></rss>`;
+
+    const post_data = querystring.stringify({
+      ApiKey:    targetConfig.apiKey || '__DEV_KEY__',
+      IsLogging: targetConfig.isLoggingOn || 'true',
+      IsRss:     'true',
+      PostBody:  feedXml
+    });
+    await postFn(post_data);
+    console.log('| generateFeed: feed.xml posted successfully.');
+  } catch (error) {
+    console.error('| generateFeed failed:', error);
+  }
+};
+
 /* GET THE POSTS
 
 */
@@ -227,30 +372,20 @@ server.get('/api/posts', (req, res) => {
   const postCollection = [];
 
   if (files) {
-    try {
-      // files object contains all files names
-      files.forEach(file => {
-        // console.log('reading file', file);
-        try {
-          const data = fs.readFileSync('./server/posts/' + file);
-          postCollection.push(JSON.parse(data));
-        } catch (err) {
-          console.error('| build list of posts', err);
-          returnError = err;
-        }
-      });
-    }
-    catch(error) {
-      console.log('| Error iterating over the files', error);
-      returnError = error;
-    }
+    files.forEach(file => {
+      try {
+        const data = fs.readFileSync('./server/posts/' + file);
+        postCollection.push(JSON.parse(data));
+      } catch (err) {
+        console.error('| build list of posts: skipping bad file', file, err.message);
+      }
+    });
   }
 
   if (returnError) {
-    res.status(500)
+    res.status(500);
     res.send({error: returnError.message});
-  }
-  else {
+  } else {
     res.send(JSON.stringify(postCollection));
   }
 });
@@ -462,7 +597,32 @@ const getCompiledPost = async (post) => {
     year: 'numeric', month: 'long', day: 'numeric'
   });
   if (!post.author) post.author = 'Sean Brookes';
-  post.markup = converter.makeHtml(post.body);
+  if (!post.updatedDate) post.updatedDate = '';
+  if (!post.summary) post.summary = '';
+  if (post.updatedDate) {
+    post.updatedDateFormatted = new Date(post.updatedDate).toLocaleDateString('en-CA', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
+  }
+
+  const postPath = `blog/${post.publishYear}/${post.publishMonth}/${post.slug}.html`;
+  post.canonicalUrl = SITE_URL ? `${SITE_URL}/${postPath}` : '';
+  const rawDescription = post.summary || getExcerpt(post.body);
+  post.descriptionAttr = escapeAttr(rawDescription);
+  post.titleAttr = escapeAttr(post.title || '');
+  post.jsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: post.title,
+    description: rawDescription,
+    author: { '@type': 'Person', name: post.author },
+    datePublished: post.publishDate,
+    ...(post.updatedDate ? { dateModified: post.updatedDate } : {}),
+    ...(post.canonicalUrl ? { url: post.canonicalUrl } : {}),
+    publisher: { '@type': 'Person', name: 'fourfivesix.ca' }
+  }, null, 2);
+
+  post.markup = renderBody(post);
 
   const compiled = _.template(templateData);
   return compiled(post);
@@ -613,6 +773,8 @@ server.get('/api/generatestaging', async (req, res) => {
 
   await Promise.all(postPromises);
   await generateHomePage(targetConfig, stagedPost);
+  await generateFeed(targetConfig);
+  copyStaticAssets();
 
   res.status(200).send({message: 'Staging generation complete.'});
 });
@@ -644,6 +806,7 @@ server.get('/api/deploylive', async (req, res) => {
 
   await Promise.all(postPromises);
   await generateHomePage({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, null, postToLive);
+  await generateFeed({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, postToLive);
 
   if (errors.length > 0) {
     res.status(207).send({ message: 'Deployed with some errors.', errors });
@@ -691,6 +854,7 @@ server.get('/api/stage/:id', async (req, res) => {
       PostBody: postBody
     });
     await postToStaging(post_data);
+    copyStaticAssets();
   } catch (e) {
     console.error('| /api/stage compile/send error', e);
   }
@@ -726,7 +890,7 @@ server.post('/api/publish', async (req, res) => {
     // 1. Compile post HTML
     const postBody = await getCompiledPost(post);
 
-    // 2. Send to live server
+    // 2. Send to live server — if this fails we abort; nothing else should run
     await postToLive(querystring.stringify({
       ApiKey: LIVE_KEY,
       PostPublishYear: post.publishYear,
@@ -736,27 +900,28 @@ server.post('/api/publish', async (req, res) => {
       PostBody: postBody
     }));
 
-    // 3. Mirror to local staging
-    await postToStaging(querystring.stringify({
+    // 3. Persist published status immediately after live succeeds
+    // Strip compiled-only fields — they belong in the HTML output, not the source JSON
+    const compiledFields = new Set(['markup', 'descriptionAttr', 'titleAttr', 'jsonLd', 'canonicalUrl', 'publishDateFormatted', 'updatedDateFormatted']);
+    const postToSave = Object.fromEntries(Object.entries(post).filter(([k]) => !compiledFields.has(k)));
+    fs.writeFileSync(`./server/posts/${post.id}.json`, JSON.stringify(postToSave));
+
+    // 4. Mirror to staging and regenerate home pages — non-fatal, don't block response
+    const postData = querystring.stringify({
       ApiKey: STAGING_KEY,
       PostPublishYear: post.publishYear,
       PostPublishMonth: post.publishMonth,
       IsLogging: 'true',
       PostSlug: post.slug,
       PostBody: postBody
-    }));
-
-    // 4. Persist published status locally
-    await new Promise((resolve, reject) => {
-      fs.writeFile(`./server/posts/${post.id}.json`, JSON.stringify(post), err => {
-        if (err) return reject(err);
-        resolve();
-      });
     });
-
-    // 5. Regenerate home page on live and local
-    await generateHomePage({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, null, postToLive);
-    await generateHomePage({ apiKey: STAGING_KEY, isLoggingOn: 'true' });
+    postToStaging(postData).catch(err =>
+      console.warn('| publish: staging mirror failed (non-fatal):', err.message)
+    );
+    generateHomePage({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, null, postToLive).catch(console.error);
+    generateHomePage({ apiKey: STAGING_KEY, isLoggingOn: 'true' }).catch(console.error);
+    generateFeed({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, postToLive).catch(console.error);
+    generateFeed({ apiKey: STAGING_KEY, isLoggingOn: 'true' }).catch(console.error);
 
     res.status(200).send({ status: 200, message: 'published' });
   } catch (error) {
@@ -779,6 +944,69 @@ server.post('/api/unpublish/:id', (req, res) => {
     res.status(200).send({ message: 'Post unpublished', post });
   } catch (e) {
     res.status(500).send({ message: 'Failed to unpublish post', error: e.message });
+  }
+});
+
+server.get('/api/repaintlive/:id', async (req, res) => {
+  const postId = req.params.id;
+  const filePath = `./server/posts/${postId}.json`;
+
+  if (!postId || !fs.existsSync(filePath)) {
+    return res.status(404).send({ message: 'Post not found' });
+  }
+
+  let post;
+  try {
+    post = JSON.parse(fs.readFileSync(filePath));
+  } catch (e) {
+    return res.status(500).send({ message: 'Failed to read post' });
+  }
+
+  if (post.status !== 'published') {
+    return res.status(400).send({ message: 'Post must be published to repaint' });
+  }
+
+  // Record update timestamp without touching publishDate/publishYear/publishMonth/slug
+  post.updatedDate = new Date().toISOString();
+  post.lastUpdate = new Date().getTime();
+
+  try {
+    const compiledFields = new Set(['markup', 'descriptionAttr', 'titleAttr', 'jsonLd', 'canonicalUrl', 'publishDateFormatted', 'updatedDateFormatted']);
+    fs.writeFileSync(filePath, JSON.stringify(
+      Object.fromEntries(Object.entries(post).filter(([k]) => !compiledFields.has(k)))
+    ));
+
+    const postBody = await getCompiledPost(post);
+
+    await postToLive(querystring.stringify({
+      ApiKey: LIVE_KEY,
+      PostPublishYear: post.publishYear,
+      PostPublishMonth: post.publishMonth,
+      IsLogging: 'true',
+      PostSlug: post.slug,
+      PostBody: postBody
+    }));
+
+    await postToStaging(querystring.stringify({
+      ApiKey: STAGING_KEY,
+      PostPublishYear: post.publishYear,
+      PostPublishMonth: post.publishMonth,
+      IsLogging: 'true',
+      PostSlug: post.slug,
+      PostBody: postBody
+    }));
+
+    copyStaticAssets();
+
+    await generateHomePage({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, null, postToLive);
+    await generateHomePage({ apiKey: STAGING_KEY, isLoggingOn: 'true' });
+    await generateFeed({ apiKey: LIVE_KEY, isLoggingOn: 'true' }, postToLive);
+    await generateFeed({ apiKey: STAGING_KEY, isLoggingOn: 'true' });
+
+    res.status(200).send({ message: `Repainted: ${post.title}`, updatedDate: post.updatedDate });
+  } catch (error) {
+    console.error('| repaintlive error:', error);
+    res.status(500).send({ message: 'Repaint failed', details: error.message });
   }
 });
 

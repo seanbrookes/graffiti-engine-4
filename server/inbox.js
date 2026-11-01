@@ -10,9 +10,9 @@ const BLOG_ROOT_DIR = 'local-web-cloud'; // The root folder where posts will be 
 const LOG_DIR = 'log';
 
 const server = express();
-server.use(express.json());
+server.use(express.json({ limit: '10mb' }));
 server.use(cors());
-server.use(express.urlencoded({ extended: true }));
+server.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // --- HELPER: Logging Function ---
 const wh_log = (msg, isLogging) => {
     if (isLogging !== 'true') return;
@@ -39,14 +39,15 @@ const wh_log = (msg, isLogging) => {
 */
 server.post('/api/inbox', async (req, res) => {
     // Note: IsIndex is now destructured along with other properties
-    const { 
-        IsLogging, 
-        ApiKey, 
-        PostPublishYear, 
-        PostPublishMonth, 
-        PostSlug, 
+    const {
+        IsLogging,
+        ApiKey,
+        PostPublishYear,
+        PostPublishMonth,
+        PostSlug,
         PostBody,
-        IsIndex // <--- NEW: Flag for index.html generation
+        IsIndex,
+        IsRss
     } = req.body;
 
     console.log('| GE inbox 1 req.body', req.body);
@@ -70,7 +71,7 @@ server.post('/api/inbox', async (req, res) => {
 
     // 2. INPUT VALIDATION
     // Only require PostPublishYear, PostPublishMonth, and PostSlug if it is NOT the index file.
-    if (IsIndex !== 'true' && (!PostPublishYear || !PostPublishMonth || !PostSlug || !PostBody)) {
+    if (IsIndex !== 'true' && IsRss !== 'true' && (!PostPublishYear || !PostPublishMonth || !PostSlug || !PostBody)) {
       console.log('| GE inbox 6');
       wh_log('| GE: Missing required fields for non-index post.', IsLogging);
         return res.status(400).json({ 
@@ -86,13 +87,20 @@ server.post('/api/inbox', async (req, res) => {
     const content = PostBody; 
     
     if (IsIndex === 'true') {
-        // --- Index File Logic ---
         fileName = 'index.html';
-        fileDir  = BLOG_ROOT_DIR; // Save directly in the root folder
+        fileDir  = BLOG_ROOT_DIR;
         pubYear  = 'N/A';
         pubMonth = 'N/A';
         slug     = 'index';
         wh_log('| GE: Processing index.html', IsLogging);
+
+    } else if (IsRss === 'true') {
+        fileName = 'feed.xml';
+        fileDir  = BLOG_ROOT_DIR;
+        pubYear  = 'N/A';
+        pubMonth = 'N/A';
+        slug     = 'feed';
+        wh_log('| GE: Processing feed.xml', IsLogging);
 
     } else {
         // --- Regular Post Logic ---

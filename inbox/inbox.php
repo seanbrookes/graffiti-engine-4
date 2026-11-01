@@ -28,6 +28,31 @@ if ($receivedKey !== $EXPECTED_API_KEY) {
 wh_log("| GE: Auth success.");
 
 $isIndex = isset($_POST['IsIndex']) && $_POST['IsIndex'] === 'true';
+$isRss   = isset($_POST['IsRss'])   && $_POST['IsRss']   === 'true';
+
+if ($isRss) {
+    $filePath = $_SERVER['DOCUMENT_ROOT'] . "/feed.xml";
+    $content  = isset($_POST['PostBody']) ? $_POST['PostBody'] : '';
+
+    if (empty($content)) {
+        http_response_code(400);
+        echo json_encode(["status" => "error", "message" => "Missing PostBody for feed"]);
+        exit;
+    }
+
+    wh_log("| GE: Writing feed.xml");
+
+    if (file_put_contents($filePath, $content) !== false) {
+        wh_log("| GE: feed.xml write success");
+        http_response_code(200);
+        echo json_encode(["status" => "success", "path" => "feed.xml"]);
+    } else {
+        wh_log("| GE: feed.xml write failed");
+        http_response_code(500);
+        echo json_encode(["status" => "error", "message" => "Failed to write feed.xml"]);
+    }
+    exit;
+}
 
 if ($isIndex) {
     // Write index.html to the web root

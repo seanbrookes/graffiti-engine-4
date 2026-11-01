@@ -3,7 +3,29 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>fourfivesix.ca</title>
+    <% if (description) { %><meta name="description" content="<%= description %>"><% } %>
+    <meta name="robots" content="index, follow">
+    <% if (canonicalUrl) { %><link rel="canonical" href="<%= canonicalUrl %>"><% } %>
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="fourfivesix.ca">
+    <% if (description) { %><meta property="og:description" content="<%= description %>"><% } %>
+    <meta property="og:site_name" content="fourfivesix.ca">
+    <meta property="og:locale" content="en_CA">
+    <% if (canonicalUrl) { %><meta property="og:url" content="<%= canonicalUrl %>"><% } %>
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="fourfivesix.ca">
+    <% if (description) { %><meta name="twitter:description" content="<%= description %>"><% } %>
+
+    <!-- Structured Data -->
+    <script type="application/ld+json"><%= jsonLd %></script>
+
+    <link rel="alternate" type="application/rss+xml" title="fourfivesix.ca" href="/feed.xml">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>

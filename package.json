@@ -33,14 +33,12 @@
     "node-fetch": "^3.3.1",
     "parse5": "^7.1.2",
     "querystring": "^0.2.0",
-    "request": "^2.88.2",
-    "showdown": "^1.9.1",
     "turndown": "^7.1.2",
     "vue": "^3.2.47"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^4.1.0",
+    "@vitejs/plugin-vue": "^6.0.0",
     "concurrently": "^9.2.1",
-    "vite": "^4.3.9"
+    "vite": "^7.3.7"
   }
 }

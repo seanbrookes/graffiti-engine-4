@@ -42,7 +42,7 @@ const handleAction = (actionName, postId) => {
   if (actionName === POST_ACTIONS.STAGE)     store.methods.stagePost(postId);
   if (actionName === POST_ACTIONS.PUBLISH)   store.methods.publishPost(postId);
   if (actionName === POST_ACTIONS.UNSTAGE)   store.methods.unstagePost(postId);
-  if (actionName === POST_ACTIONS.REPAINT)   store.methods.paintPost(postId);
+  if (actionName === POST_ACTIONS.REPAINT)   store.methods.repaintPost(postId);
   if (actionName === POST_ACTIONS.UNPUBLISH) store.methods.unpublishPost(postId);
 };
 

@@ -314,6 +314,14 @@ const methods = {
     return;
   },
 
+  updateCurrentPostSummary (summary) {
+    state.currentPost.summary = summary;
+  },
+
+  updateCurrentPostBodyMode (mode) {
+    state.currentPost.bodyMode = mode;
+  },
+
   updateCurrentPostTitle (postTitle) {
     if (state.currentPost.title === postTitle) {
       // post title has not changed
@@ -375,6 +383,16 @@ const methods = {
       fetchPosts();
     } catch (error) {
       console.error('| unstagePost error:', error);
+    }
+  },
+
+  async repaintPost(postId) {
+    try {
+      const response = await fetch(`http://localhost:4444/api/repaintlive/${postId}`);
+      if (!response.ok) throw response;
+      fetchPosts();
+    } catch (error) {
+      console.error('| repaintPost error:', error);
     }
   },
 
